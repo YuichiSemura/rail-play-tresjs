@@ -1,0 +1,35 @@
+{
+  "name": "rail-play-tresjs",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "レールあそびアプリ - TresJS+Vue+Vuetifyで作る3Dレール配置ゲーム",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "lint": "biome lint src/",
+    "format": "biome format . --write"
+  },
+  "dependencies": {
+    "@tresjs/cientos": "^4.3.1",
+    "@tresjs/core": "^4.3.5",
+    "@tresjs/leches": "latest",
+    "three": "^0.159.0",
+    "vue": "^3.3.9",
+    "vuetify": "^3.5.13"
+  },
+  "devDependencies": {
+    "@mdi/font": "^7.4.47",
+    "@types/three": "^0.159.0",
+    "@vitejs/plugin-vue": "^4.5.1",
+    "@biomejs/biome": "^1.4.0",
+    "typescript": "^5.3.2",
+    "vite": "^5.4.6",
+    "vite-plugin-glsl": "^1.2.0",
+    "vue-tsc": "^2.2.10"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.6.1"
+  }
+}
