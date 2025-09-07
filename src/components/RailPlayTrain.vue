@@ -68,6 +68,10 @@ const props = defineProps<{
   speed: number;
 }>();
 
+const emit = defineEmits<{
+  (e: "pose", payload: { position: [number, number, number]; rotation: [number, number, number] }): void;
+}>();
+
 // スケール適用後の高さ補正
 const TRAIN_SCALE = 0.3; // さらに縮小
 const BASE_HEIGHT_OFFSET = 1.03; // 元サイズ時
@@ -143,6 +147,7 @@ const animate = () => {
     const { position, rotation } = getPositionAndRotationOnRail(rail, railProgress);
     trainPosition.value = position;
     trainRotation.value = rotation;
+    emit("pose", { position, rotation: [rotation[0], rotation[1] - Math.PI, rotation[2]] });
   }
 
   animationId = requestAnimationFrame(animate);

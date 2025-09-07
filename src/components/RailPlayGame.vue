@@ -109,6 +109,11 @@
               {{ trainRunning ? "停止" : "走らせる" }}
             </v-btn>
 
+            <v-btn color="secondary" :disabled="!canRunTrain" @click="toggleCameraMode" block class="mb-3">
+              <v-icon class="mr-1">{{ cameraMode === "orbit" ? "mdi-train" : "mdi-orbit" }}</v-icon>
+              {{ cameraMode === "orbit" ? "先頭カメラ" : "自由視点" }}
+            </v-btn>
+
             <v-slider v-model="trainSpeed" :min="0.1" :max="2.0" :step="0.1" label="速度" />
           </v-card-text>
         </v-card>
@@ -116,11 +121,15 @@
 
       <v-col cols="9" class="position-relative">
         <TresCanvas style="height: 100vh" @click="onCanvasClick">
-          <!-- Camera -->
-          <TresPerspectiveCamera :position="[15, 8, 15]" />
+          <!-- Main Camera (orbit / front 共用) -->
+          <TresPerspectiveCamera
+            :position="cameraPosition"
+            :rotation="cameraRotation"
+            :fov="cameraMode === 'orbit' ? 50 : 70"
+          />
 
-          <!-- Controls -->
-          <OrbitControls />
+          <!-- Controls (orbit モード時のみ) -->
+          <OrbitControls v-if="cameraMode === 'orbit'" />
 
           <!-- Lights -->
           <TresAmbientLight :intensity="0.5" />
@@ -161,7 +170,7 @@
           <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
           <!-- Train -->
-          <RailPlayTrain v-if="rails.length > 0" :rails="rails" :speed="trainSpeed" />
+          <RailPlayTrain v-if="rails.length > 0" :rails="rails" :speed="trainSpeed" @pose="onTrainPose" />
         </TresCanvas>
       </v-col>
     </v-row>
@@ -169,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { TresCanvas } from "@tresjs/core";
 import { OrbitControls } from "@tresjs/cientos";
 import RailPlayRail from "./RailPlayRail.vue";
@@ -194,6 +203,7 @@ export interface Rail {
 }
 
 type GameMode = "build" | "run";
+type CameraMode = "orbit" | "front";
 
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<"straight" | "curve" | "rotate" | "delete">("straight");
@@ -201,6 +211,31 @@ const rails = ref<Rail[]>([]);
 const trainRunning = ref(false);
 const trainSpeed = ref(1.0);
 const isRailsLocked = ref(false);
+const cameraMode = ref<CameraMode>("orbit");
+// カメラ姿勢（orbit モード初期位置）
+const cameraPosition = ref<[number, number, number]>([15, 8, 15]);
+const cameraRotation = ref<[number, number, number]>([0, 0, 0]);
+// 列車先頭ビュー時の追従オフセット
+const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.4]; // 少し後ろから車両前方を見る
+
+const onTrainPose = (payload: { position: [number, number, number]; rotation: [number, number, number] }) => {
+  if (cameraMode.value !== "front") return;
+  const [px, py, pz] = payload.position;
+  const [, yaw] = payload.rotation;
+  // yaw に基づきローカルオフセットを回転
+  const ox = FRONT_OFFSET[0] * Math.cos(yaw) - FRONT_OFFSET[2] * Math.sin(yaw);
+  const oz = FRONT_OFFSET[0] * Math.sin(yaw) + FRONT_OFFSET[2] * Math.cos(yaw);
+  cameraPosition.value = [px - ox, py + FRONT_OFFSET[1], pz + oz];
+  cameraRotation.value = [0, yaw, 0];
+};
+
+// モード切替時に orbit 初期姿勢へ戻す
+watch(cameraMode, (m) => {
+  if (m === "orbit") {
+    cameraPosition.value = [15, 8, 15];
+    cameraRotation.value = [0, 0, 0];
+  }
+});
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -467,6 +502,10 @@ const clearAllRails = () => {
 
 const toggleTrain = () => {
   trainRunning.value = !trainRunning.value;
+};
+
+const toggleCameraMode = () => {
+  cameraMode.value = cameraMode.value === "orbit" ? "front" : "orbit";
 };
 
 // オーバル（1直線 + 左半円 + 1直線 + 左半円 = 計10本）プリセット生成
