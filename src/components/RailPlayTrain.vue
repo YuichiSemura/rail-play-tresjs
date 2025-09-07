@@ -70,7 +70,7 @@ const props = defineProps<{
 
 // スケール適用後の高さ補正
 const TRAIN_SCALE = 0.3; // さらに縮小
-const BASE_HEIGHT_OFFSET = 0.7; // 元サイズ時
+const BASE_HEIGHT_OFFSET = 1.03; // 元サイズ時
 const HEIGHT_OFFSET = BASE_HEIGHT_OFFSET * TRAIN_SCALE;
 const trainPosition = ref<[number, number, number]>([0, HEIGHT_OFFSET, 0]);
 const trainRotation = ref<[number, number, number]>([0, 0, 0]);
