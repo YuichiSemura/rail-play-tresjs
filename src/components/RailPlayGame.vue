@@ -3,8 +3,20 @@
     <v-row no-gutters style="height: 100%">
       <v-col cols="3">
         <v-card class="h-100 pa-4">
-          <v-card-title>レール選択</v-card-title>
-          <v-card-text>
+          <v-card-title class="d-flex justify-space-between align-center">
+            <span>{{ gameMode === "build" ? "レール配置モード" : "運転モード" }}</span>
+            <v-btn
+              size="small"
+              :color="gameMode === 'run' ? 'success' : 'primary'"
+              @click="toggleGameMode"
+              :disabled="gameMode === 'build' && !canRunTrain"
+            >
+              <v-icon>{{ gameMode === "build" ? "mdi-play" : "mdi-wrench" }}</v-icon>
+              {{ gameMode === "build" ? "運転" : "配置" }}
+            </v-btn>
+          </v-card-title>
+
+          <v-card-text v-if="gameMode === 'build'">
             <v-btn-toggle v-model="selectedTool" color="primary" mandatory>
               <v-btn value="straight">
                 <v-icon>mdi-minus</v-icon>
@@ -14,11 +26,90 @@
                 <v-icon>mdi-rotate-right</v-icon>
                 カーブ
               </v-btn>
+              <v-btn value="rotate">
+                <v-icon>mdi-rotate-3d-variant</v-icon>
+                回転
+              </v-btn>
               <v-btn value="delete">
                 <v-icon>mdi-delete</v-icon>
                 削除
               </v-btn>
             </v-btn-toggle>
+
+            <div v-if="selectedTool === 'rotate'" class="mt-3">
+              <v-alert type="info">
+                <v-icon>mdi-information</v-icon>
+                回転したいレールをクリックしてください
+              </v-alert>
+            </div>
+
+            <v-alert v-if="isRailsLocked" type="success" class="mt-4">
+              <v-icon>mdi-check-circle</v-icon>
+              線路が周回完成！
+            </v-alert>
+
+            <v-alert v-else-if="rails.length > 0" type="info" class="mt-4">
+              線路: {{ rails.length }}本配置済み
+            </v-alert>
+
+            <v-divider class="my-4" />
+
+            <v-card-subtitle>Rails データ (デバッグ用)</v-card-subtitle>
+            <div class="rails-debug" style="max-height: 300px; overflow-y: auto; font-size: 12px">
+              <div
+                v-for="(rail, index) in rails"
+                :key="rail.id"
+                class="mb-2 pa-2"
+                style="background-color: #f5f5f5; border-radius: 4px"
+              >
+                <div>
+                  <strong>Rail {{ index }}:</strong>
+                </div>
+                <div>Type: {{ rail.type }}</div>
+                <div>
+                  Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
+                  {{ rail.position[2].toFixed(2) }}]
+                </div>
+                <div>
+                  Rotation: [{{ rail.rotation[0].toFixed(2) }}, {{ rail.rotation[1].toFixed(2) }},
+                  {{ rail.rotation[2].toFixed(2) }}]
+                </div>
+                <div>
+                  Start: [{{ rail.connections.start[0].toFixed(2) }}, {{ rail.connections.start[1].toFixed(2) }},
+                  {{ rail.connections.start[2].toFixed(2) }}]
+                </div>
+                <div>
+                  End: [{{ rail.connections.end[0].toFixed(2) }}, {{ rail.connections.end[1].toFixed(2) }},
+                  {{ rail.connections.end[2].toFixed(2) }}]
+                </div>
+              </div>
+            </div>
+
+            <v-divider class="my-4" />
+
+            <v-card-subtitle>プリセット線路</v-card-subtitle>
+            <v-btn color="secondary" @click="createLargeCircle" :disabled="rails.length > 0" block class="mb-2">
+              <v-icon>mdi-circle-outline</v-icon>
+              大きな円を生成
+            </v-btn>
+
+            <v-btn color="secondary" @click="createOvalPreset()" :disabled="rails.length > 0" block class="mb-2">
+              <v-icon>mdi-ellipse-outline</v-icon>
+              オーバル生成
+            </v-btn>
+
+            <v-btn color="warning" @click="clearAllRails" :disabled="rails.length === 0" block>
+              <v-icon>mdi-delete-sweep</v-icon>
+              すべてクリア
+            </v-btn>
+          </v-card-text>
+
+          <v-card-text v-else>
+            <v-btn color="success" :disabled="!canRunTrain" @click="toggleTrain" block class="mb-3">
+              {{ trainRunning ? "停止" : "走らせる" }}
+            </v-btn>
+
+            <v-slider v-model="trainSpeed" :min="0.1" :max="2.0" :step="0.1" label="速度" />
           </v-card-text>
         </v-card>
       </v-col>
@@ -26,36 +117,52 @@
       <v-col cols="9" class="position-relative">
         <TresCanvas style="height: 100vh" @click="onCanvasClick">
           <!-- Camera -->
-          <TresPerspectiveCamera :position="[0, 10, 10]" />
-          
+          <TresPerspectiveCamera :position="[15, 8, 15]" />
+
           <!-- Controls -->
           <OrbitControls />
-          
+
           <!-- Lights -->
           <TresAmbientLight :intensity="0.5" />
           <TresDirectionalLight :position="[10, 10, 5]" :intensity="1" cast-shadow />
 
           <!-- Floor -->
-          <TresMesh :rotation="[-Math.PI / 2, 0, 0]" :position="[0, -0.5, 0]" @click="onPlaneClick">
+          <TresMesh :rotation="[-Math.PI / 2, 0, 0]" :position="[0, -0.01, 0]" @click="onPlaneClick">
             <TresPlaneGeometry :args="[50, 50]" />
-            <TresMeshLambertMaterial color="#90EE90" />
+            <TresMeshLambertMaterial color="#90EE90" :side="2" />
+          </TresMesh>
+
+          <!-- 壁（方角表示用） -->
+          <!-- 北の壁（赤） -->
+          <TresMesh :position="[0, 5, -25]">
+            <TresPlaneGeometry :args="[50, 10]" />
+            <TresMeshLambertMaterial color="#FF6B6B" :side="2" />
+          </TresMesh>
+
+          <!-- 南の壁（青） -->
+          <TresMesh :position="[0, 5, 25]">
+            <TresPlaneGeometry :args="[50, 10]" />
+            <TresMeshLambertMaterial color="#4ECDC4" :side="2" />
+          </TresMesh>
+
+          <!-- 東の壁（黄） -->
+          <TresMesh :position="[25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
+            <TresPlaneGeometry :args="[50, 10]" />
+            <TresMeshLambertMaterial color="#FFE66D" :side="2" />
+          </TresMesh>
+
+          <!-- 西の壁（緑） -->
+          <TresMesh :position="[-25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
+            <TresPlaneGeometry :args="[50, 10]" />
+            <TresMeshLambertMaterial color="#95E1D3" :side="2" />
           </TresMesh>
 
           <!-- Rails -->
           <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
           <!-- Train -->
-          <RailPlayTrain v-if="trainRunning && rails.length > 0" :rails="rails" :speed="trainSpeed" />
+          <RailPlayTrain v-if="rails.length > 0" :rails="rails" :speed="trainSpeed" />
         </TresCanvas>
-
-        <div class="position-absolute bottom-4 right-4">
-          <v-card class="pa-3">
-            <v-btn color="success" :disabled="!canRunTrain" @click="toggleTrain">
-              {{ trainRunning ? "停止" : "走らせる" }}
-            </v-btn>
-            <v-slider v-model="trainSpeed" :min="0.1" :max="2.0" :step="0.1" label="速度" class="mt-3" />
-          </v-card>
-        </div>
       </v-col>
     </v-row>
   </v-container>
@@ -64,9 +171,16 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { TresCanvas } from "@tresjs/core";
-import { OrbitControls } from '@tresjs/cientos';
+import { OrbitControls } from "@tresjs/cientos";
 import RailPlayRail from "./RailPlayRail.vue";
 import RailPlayTrain from "./RailPlayTrain.vue";
+// 共通定数
+import {
+  CURVE_SEGMENT_ANGLE as CURVE_ANGLE,
+  RAIL_CURVE_RADIUS,
+  RAIL_STRAIGHT_FULL_LENGTH,
+  RAIL_STRAIGHT_HALF_LENGTH,
+} from "../constants/rail";
 
 export interface Rail {
   id: string;
@@ -79,10 +193,14 @@ export interface Rail {
   };
 }
 
-const selectedTool = ref<"straight" | "curve" | "delete">("straight");
+type GameMode = "build" | "run";
+
+const gameMode = ref<GameMode>("build");
+const selectedTool = ref<"straight" | "curve" | "rotate" | "delete">("straight");
 const rails = ref<Rail[]>([]);
 const trainRunning = ref(false);
 const trainSpeed = ref(1.0);
+const isRailsLocked = ref(false);
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -95,7 +213,15 @@ const isLoopComplete = (): boolean => {
       (firstRail.connections.start[2] - lastRail.connections.end[2]) ** 2
   );
 
-  return distance < 1;
+  const isConnected = distance < 0.5;
+
+  if (isConnected && !isRailsLocked.value) {
+    isRailsLocked.value = true;
+    gameMode.value = "run"; // 自動的にランモードに切り替え
+    console.log("線路が周回完成！ランモードに切り替えました");
+  }
+
+  return isConnected;
 };
 
 const canRunTrain = computed(() => {
@@ -115,11 +241,17 @@ const calculateConnections = (
   const [, ry] = rotation;
 
   if (type === "straight") {
-    const length = 2;
-    const startX = x - Math.cos(ry) * length;
-    const startZ = z - Math.sin(ry) * length;
-    const endX = x + Math.cos(ry) * length;
-    const endZ = z + Math.sin(ry) * length;
+    const length = RAIL_STRAIGHT_HALF_LENGTH; // 直線レールの半分の長さ（中心から端まで）
+    // rotation.y は進行方向角 pathAngle のマイナス値を保持する設計に統一する
+    // （Box の長辺は X 軸方向なので、進行方向ベクトル d = (cos(pathAngle), sin(pathAngle))
+    //  に対してオブジェクトの回転は -pathAngle になる）
+    const dirX = Math.cos(-ry); // = cos(pathAngle)
+    const dirZ = Math.sin(-ry); // = sin(pathAngle)
+
+    const startX = x - dirX * length;
+    const startZ = z - dirZ * length;
+    const endX = x + dirX * length;
+    const endZ = z + dirZ * length;
 
     return {
       start: [startX, y, startZ] as [number, number, number],
@@ -127,14 +259,13 @@ const calculateConnections = (
     };
   }
 
-  const radius = 2;
-  const startAngle = ry;
-  const endAngle = ry + Math.PI / 2;
-
-  const startX = x + Math.cos(startAngle) * radius;
-  const startZ = z + Math.sin(startAngle) * radius;
-  const endX = x + Math.cos(endAngle) * radius;
-  const endZ = z + Math.sin(endAngle) * radius;
+  const radius = RAIL_CURVE_RADIUS;
+  // ry = 開始接線方向角 θ （旧方式に戻す: start/end を sin/cos の組合せで計算）
+  const theta = ry;
+  const startX = x + Math.sin(theta) * radius;
+  const startZ = z - Math.cos(theta) * radius;
+  const endX = x + Math.sin(theta + CURVE_ANGLE) * radius;
+  const endZ = z - Math.cos(theta + CURVE_ANGLE) * radius;
 
   return {
     start: [startX, y, startZ] as [number, number, number],
@@ -153,34 +284,87 @@ const findBestConnection = (clickX: number, clickZ: number, type: "straight" | "
   const lastRail = rails.value[rails.value.length - 1];
   const connectPoint = lastRail.connections.end;
 
+  let bestPosition: [number, number, number];
   let bestRotation: [number, number, number] = [0, 0, 0];
 
   if (type === "straight") {
+    // 直線レールの場合、クリック方向に向けた直線を作成
     const dx = snapToGrid(clickX) - connectPoint[0];
     const dz = snapToGrid(clickZ) - connectPoint[2];
-    const angle = Math.atan2(dz, dx);
-    bestRotation = [0, angle, 0];
+    // 進行方向角（X を第一引数, Z を第二引数で atan2）
+    const pathAngle = Math.atan2(dz, dx); // 進行方向角 θ
+    // Box の長辺 X 軸を進行方向へ向けるためオブジェクトの回転は -pathAngle
+    bestRotation = [0, -pathAngle, 0];
+
+    // 直線レールの中心位置を計算（startがconnectPointになるように）
+    const length = RAIL_STRAIGHT_HALF_LENGTH; // 半分の長さ
+    bestPosition = [
+      connectPoint[0] + Math.cos(pathAngle) * length,
+      connectPoint[1],
+      connectPoint[2] + Math.sin(pathAngle) * length,
+    ] as [number, number, number];
   } else {
+    // カーブレールの場合
     const dx = snapToGrid(clickX) - connectPoint[0];
     const dz = snapToGrid(clickZ) - connectPoint[2];
-    const angle = Math.atan2(dz, dx) - Math.PI / 4;
-    bestRotation = [0, angle, 0];
+    // 開始接線方向 θ （進行方向）
+    const theta = Math.atan2(dz, dx);
+    bestRotation = [0, theta, 0];
+    const radius = RAIL_CURVE_RADIUS;
+    // 中心 = start - nL * r （nL = (-sinθ, cosθ)） => start が connectPoint
+    bestPosition = [
+      connectPoint[0] - -Math.sin(theta) * radius, // = connectPoint.x + sinθ * r
+      connectPoint[1],
+      connectPoint[2] - Math.cos(theta) * radius, // = connectPoint.z - cosθ * r
+    ] as [number, number, number];
   }
 
   return {
-    position: connectPoint,
+    position: bestPosition,
     rotation: bestRotation,
   };
 };
 
 const createRail = (x: number, z: number, type: "straight" | "curve"): Rail => {
   const connection = findBestConnection(x, z, type);
-  const connections = calculateConnections(connection.position, connection.rotation, type);
+  let connections = calculateConnections(connection.position, connection.rotation, type);
+  let finalPosition = connection.position;
+
+  // 前の線路がある場合、startを前の線路のendに合わせる
+  if (rails.value.length > 0) {
+    const lastRail = rails.value[rails.value.length - 1];
+    connections.start = lastRail.connections.end;
+
+    if (type === "straight") {
+      // 直線レールの場合、startとクリック位置から適切なendとpositionを計算
+      const dx = snapToGrid(x) - connections.start[0];
+      const dz = snapToGrid(z) - connections.start[2];
+      const length = Math.sqrt(dx * dx + dz * dz);
+      const pathAngle = Math.atan2(dz, dx);
+
+      // endを計算
+      connections.end = [
+        connections.start[0] + Math.cos(pathAngle) * length,
+        connections.start[1],
+        connections.start[2] + Math.sin(pathAngle) * length,
+      ] as [number, number, number];
+
+      // positionをstartとendの中点に設定
+      finalPosition = [
+        (connections.start[0] + connections.end[0]) / 2,
+        connections.start[1],
+        (connections.start[2] + connections.end[2]) / 2,
+      ] as [number, number, number];
+
+      // 回転角度を正しく設定（線路の方向に合わせる）
+      connection.rotation = [0, -pathAngle, 0];
+    }
+  }
 
   return {
     id: `rail-${Date.now()}-${Math.random()}`,
     type,
-    position: connection.position,
+    position: finalPosition,
     rotation: connection.rotation,
     connections,
   };
@@ -193,12 +377,13 @@ interface ClickEvent {
 }
 
 const onPlaneClick = (event: ClickEvent) => {
-  if (selectedTool.value === "delete") return;
+  if (selectedTool.value === "delete" || selectedTool.value === "rotate") return;
+  if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
 
   const intersect = event.intersections?.[0];
   if (intersect) {
     const point = intersect.point;
-    const newRail = createRail(point.x, point.z, selectedTool.value);
+    const newRail = createRail(point.x, point.z, selectedTool.value as "straight" | "curve");
     rails.value.push(newRail);
   }
 };
@@ -207,17 +392,142 @@ const onCanvasClick = () => {
   // Canvas level click handling if needed
 };
 
+const rotateRail = (rail: Rail) => {
+  // 90度回転させる
+  const newRotationY = rail.rotation[1] + Math.PI / 2;
+  rail.rotation = [rail.rotation[0], newRotationY, rail.rotation[2]];
+
+  // 接続点を再計算
+  rail.connections = calculateConnections(rail.position, rail.rotation, rail.type);
+
+  // 周回状態をリセット（回転によって接続が変わる可能性があるため）
+  if (isRailsLocked.value) {
+    isRailsLocked.value = false;
+    gameMode.value = "build";
+  }
+};
+
 const onRailClick = (rail: Rail) => {
+  if (gameMode.value !== "build") return;
+
   if (selectedTool.value === "delete") {
     const index = rails.value.findIndex((r) => r.id === rail.id);
     if (index > -1) {
       rails.value.splice(index, 1);
+      // 削除後にロック状態をリセット
+      if (isRailsLocked.value) {
+        isRailsLocked.value = false;
+        gameMode.value = "build"; // ビルドモードに戻す
+      }
     }
+  } else if (selectedTool.value === "rotate") {
+    rotateRail(rail);
   }
+};
+
+const toggleGameMode = () => {
+  if (gameMode.value === "build" && canRunTrain.value) {
+    gameMode.value = "run";
+  } else if (gameMode.value === "run") {
+    gameMode.value = "build";
+    trainRunning.value = false; // 電車を停止
+  }
+};
+
+const createLargeCircle = () => {
+  // 半径2 の 45° カーブ 8本で一周
+  rails.value = [];
+  const center: [number, number, number] = [0, 0, 0];
+  const numSegments = 8;
+  const startTheta = Math.PI / 4; // 最初のレールは45°
+
+  for (let i = 0; i < numSegments; i++) {
+    const theta = startTheta + i * CURVE_ANGLE; // 開始接線方向
+    const rail: Rail = {
+      id: `circle-rail-${i}`,
+      type: "curve",
+      // 中心 = (0,0,0) に固定し、start/end は calculateConnections で中心から算出
+      position: [...center],
+      rotation: [0, theta, 0],
+      connections: { start: [0, 0, 0], end: [0, 0, 0] },
+    };
+    rail.connections = calculateConnections(rail.position, rail.rotation, rail.type);
+    rails.value.push(rail);
+  }
+  isRailsLocked.value = true;
+  gameMode.value = "run";
+};
+
+const clearAllRails = () => {
+  rails.value = [];
+  isRailsLocked.value = false;
+  gameMode.value = "build";
+  trainRunning.value = false;
 };
 
 const toggleTrain = () => {
   trainRunning.value = !trainRunning.value;
+};
+
+// オーバル（1直線 + 左半円 + 1直線 + 左半円 = 計10本）プリセット生成
+const createOvalPreset = (straightLength?: number) => {
+  rails.value = [];
+  isRailsLocked.value = false;
+  gameMode.value = "build";
+
+  const r = RAIL_CURVE_RADIUS; // カーブ半径
+  const straightL =
+    typeof straightLength === "number" && !isNaN(straightLength) ? straightLength : RAIL_STRAIGHT_FULL_LENGTH; // 直線1本の長さ（クリックイベント誤渡し対策）
+  let theta = 0; // 進行方向角
+  let current: [number, number, number] = [0, 0, 0];
+
+  const addStraightOne = () => {
+    const start = [...current] as [number, number, number];
+    const dirX = Math.cos(theta);
+    const dirZ = Math.sin(theta);
+    const end: [number, number, number] = [start[0] + dirX * straightL, 0, start[2] + dirZ * straightL];
+    const mid: [number, number, number] = [(start[0] + end[0]) / 2, 0, (start[2] + end[2]) / 2];
+    const rotation: [number, number, number] = [0, -theta, 0];
+    rails.value.push({
+      id: `oval-straight-${rails.value.length}`,
+      type: "straight",
+      position: mid,
+      rotation,
+      connections: { start, end },
+    });
+    current = end;
+  };
+
+  const addLeftCurve = () => {
+    console.log(current, theta);
+    const centerX = current[0] - Math.sin(theta) * r;
+    const centerZ = current[2] + Math.cos(theta) * r;
+    const position: [number, number, number] = [centerX, 0, centerZ];
+    const rotation: [number, number, number] = [0, theta, 0];
+    const conn = calculateConnections(position, rotation, "curve");
+    conn.start = current;
+    rails.value.push({
+      id: `oval-curve-${rails.value.length}`,
+      type: "curve",
+      position,
+      rotation,
+      connections: conn,
+    });
+    current = conn.end;
+    theta += CURVE_ANGLE;
+  };
+
+  // 1: 直線
+  addStraightOne();
+  // 2-5: 左半円（4カーブ）
+  for (let i = 0; i < 4; i++) addLeftCurve();
+  // 6: 反対側直線（現在 θ = π ）
+  addStraightOne();
+  // 7-10: 左半円（残り4カーブで閉じる）
+  for (let i = 0; i < 4; i++) addLeftCurve();
+
+  isRailsLocked.value = true;
+  gameMode.value = "run";
 };
 </script>
 
