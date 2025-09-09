@@ -202,7 +202,13 @@
           <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
           <!-- Train -->
-          <RailPlayTrain v-if="rails.length > 0" :rails="rails" :speed="trainSpeed" @pose="onTrainPose" />
+          <RailPlayTrain
+            v-if="rails.length > 0"
+            :rails="rails"
+            :speed="trainSpeed"
+            :running="trainRunning"
+            @pose="onTrainPose"
+          />
         </TresCanvas>
       </v-col>
     </v-row>

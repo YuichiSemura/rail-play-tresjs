@@ -66,6 +66,7 @@ import { RAIL_CURVE_RADIUS, CURVE_SEGMENT_ANGLE as CURVE_ANGLE } from "../consta
 const props = defineProps<{
   rails: Rail[];
   speed: number;
+  running: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -136,24 +137,42 @@ const getPositionAndRotationOnRail = (
   return { position, rotation };
 };
 
-const animate = () => {
-  if (props.rails.length === 0) return;
-
-  progress += props.speed * 0.008;
-  if (progress >= props.rails.length) progress = 0;
-
-  const currentRailIndex = Math.floor(progress);
-  const railProgress = progress - currentRailIndex;
-  const rail = props.rails[currentRailIndex];
-
-  if (rail) {
-    const { position, rotation } = getPositionAndRotationOnRail(rail, railProgress);
-    trainPosition.value = position;
-    trainRotation.value = rotation;
-    emit("pose", { position, rotation: [rotation[0], rotation[1] - Math.PI, rotation[2]] });
+const step = () => {
+  if (props.rails.length === 0) {
+    animationId = requestAnimationFrame(step);
+    return;
   }
 
-  animationId = requestAnimationFrame(animate);
+  // 走行中のみ進める
+  if (props.running) {
+    progress += props.speed * 0.008;
+    if (progress >= props.rails.length) progress = 0;
+
+    const currentRailIndex = Math.floor(progress);
+    const railProgress = progress - currentRailIndex;
+    const rail = props.rails[currentRailIndex];
+
+    if (rail) {
+      const { position, rotation } = getPositionAndRotationOnRail(rail, railProgress);
+      trainPosition.value = position;
+      trainRotation.value = rotation;
+      emit("pose", { position, rotation: [rotation[0], rotation[1] - Math.PI, rotation[2]] });
+    }
+  }
+
+  animationId = requestAnimationFrame(step);
+};
+
+const startLoop = () => {
+  if (animationId != null) return;
+  animationId = requestAnimationFrame(step);
+};
+
+const stopLoop = () => {
+  if (animationId != null) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
 };
 
 onMounted(() => {
@@ -162,12 +181,20 @@ onMounted(() => {
     trainPosition.value = position;
     trainRotation.value = rotation;
   }
-  animate();
+  if (props.running) startLoop();
 });
 
 onUnmounted(() => {
-  if (animationId) {
-    cancelAnimationFrame(animationId);
-  }
+  stopLoop();
 });
+
+// running の変化で開始/停止
+import { watch } from "vue";
+watch(
+  () => props.running,
+  (v) => {
+    if (v) startLoop();
+    else stopLoop();
+  }
+);
 </script>
