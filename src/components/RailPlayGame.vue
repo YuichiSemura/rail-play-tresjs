@@ -102,6 +102,12 @@
               <v-icon>mdi-delete-sweep</v-icon>
               すべてクリア
             </v-btn>
+            <v-divider class="my-4" />
+            <v-card-subtitle>方向デバッグ</v-card-subtitle>
+            <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
+              <v-icon>mdi-axis-z-rotate-clockwise</v-icon>
+              S字（左→右）
+            </v-btn>
           </v-card-text>
 
           <v-card-text v-else>
@@ -139,6 +145,32 @@
           <TresMesh :rotation="[-Math.PI / 2, 0, 0]" :position="[0, -0.01, 0]" @click="onPlaneClick">
             <TresPlaneGeometry :args="[50, 50]" />
             <TresMeshLambertMaterial color="#90EE90" :side="2" />
+          </TresMesh>
+
+          <!-- Grid helpers (just above the floor) - unified color -->
+          <!-- Minor grid: 1u step -->
+          <TresGridHelper :args="[50, 50, '#888888', '#888888']" :position="[0, -0.005, 0]" />
+          <!-- Major grid: 2u step (double overlay for stronger look) -->
+          <TresGridHelper :args="[50, 25, '#888888', '#888888']" :position="[0, -0.004, 0]" />
+          <TresGridHelper :args="[50, 25, '#888888', '#888888']" :position="[0, -0.003, 0]" />
+
+          <!-- Axis-aligned grid lines (X/Z at 0) -->
+          <!-- X-axis grid line at Z=0 -->
+          <TresMesh :position="[0, -0.002, 0]">
+            <TresBoxGeometry :args="[50, 0.001, 0.04]" />
+            <TresMeshBasicMaterial color="#888888" />
+          </TresMesh>
+          <!-- Z-axis grid line at X=0 -->
+          <TresMesh :position="[0, -0.002, 0]">
+            <TresBoxGeometry :args="[0.04, 0.001, 50]" />
+            <TresMeshBasicMaterial color="#888888" />
+          </TresMesh>
+
+          <!-- Origin: axes + small marker -->
+          <TresAxesHelper :args="[3]" :position="[0, 0, 0]" />
+          <TresMesh :position="[0, 0.05, 0]">
+            <TresSphereGeometry :args="[0.07, 16, 16]" />
+            <TresMeshStandardMaterial color="#FFD700" />
           </TresMesh>
 
           <!-- 壁（方角表示用） -->
@@ -200,6 +232,7 @@ export interface Rail {
     start: [number, number, number];
     end: [number, number, number];
   };
+  direction?: "left" | "right";
 }
 
 type GameMode = "build" | "run";
@@ -267,142 +300,115 @@ const snapToGrid = (position: number): number => {
   return Math.round(position / 2) * 2;
 };
 
-const calculateConnections = (
-  position: [number, number, number],
-  rotation: [number, number, number],
-  type: "straight" | "curve"
-) => {
-  const [x, y, z] = position;
-  const [, ry] = rotation;
+// 進行端点の姿勢（接続開始点とその時の進行方向角 θ）
+type Pose = { point: [number, number, number]; theta: number };
 
-  if (type === "straight") {
-    const length = RAIL_STRAIGHT_HALF_LENGTH; // 直線レールの半分の長さ（中心から端まで）
-    // rotation.y は進行方向角 pathAngle のマイナス値を保持する設計に統一する
-    // （Box の長辺は X 軸方向なので、進行方向ベクトル d = (cos(pathAngle), sin(pathAngle))
-    //  に対してオブジェクトの回転は -pathAngle になる）
-    const dirX = Math.cos(-ry); // = cos(pathAngle)
-    const dirZ = Math.sin(-ry); // = sin(pathAngle)
-
-    const startX = x - dirX * length;
-    const startZ = z - dirZ * length;
-    const endX = x + dirX * length;
-    const endZ = z + dirZ * length;
-
-    return {
-      start: [startX, y, startZ] as [number, number, number],
-      end: [endX, y, endZ] as [number, number, number],
-    };
-  }
-
-  const radius = RAIL_CURVE_RADIUS;
-  // ry = 開始接線方向角 θ （旧方式に戻す: start/end を sin/cos の組合せで計算）
-  const theta = ry;
-  const startX = x + Math.sin(theta) * radius;
-  const startZ = z - Math.cos(theta) * radius;
-  const endX = x + Math.sin(theta + CURVE_ANGLE) * radius;
-  const endZ = z - Math.cos(theta + CURVE_ANGLE) * radius;
-
+// 直線レールを返す（start=pose.point, 長さ=length, 方向=theta）
+const makeStraight = (pose: Pose, length = RAIL_STRAIGHT_FULL_LENGTH): Rail => {
+  const start = pose.point;
+  const end: [number, number, number] = [
+    start[0] + Math.cos(pose.theta) * length,
+    start[1],
+    start[2] + Math.sin(pose.theta) * length,
+  ];
+  const mid: [number, number, number] = [(start[0] + end[0]) / 2, start[1], (start[2] + end[2]) / 2];
   return {
-    start: [startX, y, startZ] as [number, number, number],
-    end: [endX, y, endZ] as [number, number, number],
+    id: `straight-${Date.now()}-${Math.random()}`,
+    type: "straight",
+    position: mid,
+    rotation: [0, -pose.theta, 0],
+    connections: { start, end },
   };
 };
 
-const findBestConnection = (clickX: number, clickZ: number, type: "straight" | "curve") => {
-  if (rails.value.length === 0) {
-    return {
-      position: [snapToGrid(clickX), 0, snapToGrid(clickZ)] as [number, number, number],
-      rotation: [0, 0, 0] as [number, number, number],
-    };
-  }
-
-  const lastRail = rails.value[rails.value.length - 1];
-  const connectPoint = lastRail.connections.end;
-
-  let bestPosition: [number, number, number];
-  let bestRotation: [number, number, number] = [0, 0, 0];
-
-  if (type === "straight") {
-    // 直線レールの場合、クリック方向に向けた直線を作成
-    const dx = snapToGrid(clickX) - connectPoint[0];
-    const dz = snapToGrid(clickZ) - connectPoint[2];
-    // 進行方向角（X を第一引数, Z を第二引数で atan2）
-    const pathAngle = Math.atan2(dz, dx); // 進行方向角 θ
-    // Box の長辺 X 軸を進行方向へ向けるためオブジェクトの回転は -pathAngle
-    bestRotation = [0, -pathAngle, 0];
-
-    // 直線レールの中心位置を計算（startがconnectPointになるように）
-    const length = RAIL_STRAIGHT_HALF_LENGTH; // 半分の長さ
-    bestPosition = [
-      connectPoint[0] + Math.cos(pathAngle) * length,
-      connectPoint[1],
-      connectPoint[2] + Math.sin(pathAngle) * length,
-    ] as [number, number, number];
-  } else {
-    // カーブレールの場合
-    const dx = snapToGrid(clickX) - connectPoint[0];
-    const dz = snapToGrid(clickZ) - connectPoint[2];
-    // 開始接線方向 θ （進行方向）
-    const theta = Math.atan2(dz, dx);
-    bestRotation = [0, theta, 0];
-    const radius = RAIL_CURVE_RADIUS;
-    // 中心 = start - nL * r （nL = (-sinθ, cosθ)） => start が connectPoint
-    bestPosition = [
-      connectPoint[0] - -Math.sin(theta) * radius, // = connectPoint.x + sinθ * r
-      connectPoint[1],
-      connectPoint[2] - Math.cos(theta) * radius, // = connectPoint.z - cosθ * r
-    ] as [number, number, number];
-  }
-
+// 左カーブ1本（45°）を返す（start=pose.point, θ=pose.theta）
+const makeLeftCurve = (pose: Pose): Rail => {
+  const r = RAIL_CURVE_RADIUS;
+  const cx = pose.point[0] - Math.sin(pose.theta) * r;
+  const cz = pose.point[2] + Math.cos(pose.theta) * r;
+  const position: [number, number, number] = [cx, 0, cz];
+  const rotation: [number, number, number] = [0, pose.theta, 0];
+  const end: [number, number, number] = [
+    position[0] + Math.sin(pose.theta + CURVE_ANGLE) * r,
+    0,
+    position[2] - Math.cos(pose.theta + CURVE_ANGLE) * r,
+  ];
   return {
-    position: bestPosition,
-    rotation: bestRotation,
+    id: `curve-left-${Date.now()}-${Math.random()}`,
+    type: "curve",
+    position,
+    rotation,
+    connections: { start: pose.point, end },
+    direction: "left",
   };
+};
+
+// 右カーブ1本（45°）を返す（start=pose.point, θ=pose.theta）
+const makeRightCurve = (pose: Pose): Rail => {
+  const r = RAIL_CURVE_RADIUS;
+  const cx = pose.point[0] + Math.sin(pose.theta) * r;
+  const cz = pose.point[2] - Math.cos(pose.theta) * r;
+  const position: [number, number, number] = [cx, 0, cz];
+  const rotation: [number, number, number] = [0, pose.theta, 0];
+  // For right turn, end point is C - n_right(theta - Δ) where n_right(a) = (sin a, -cos a)
+  // => end = [cx - sin(theta-Δ)*r, cz + cos(theta-Δ)*r]
+  const end: [number, number, number] = [
+    position[0] - Math.sin(pose.theta - CURVE_ANGLE) * r,
+    0,
+    position[2] + Math.cos(pose.theta - CURVE_ANGLE) * r,
+  ];
+  return {
+    id: `curve-right-${Date.now()}-${Math.random()}`,
+    type: "curve",
+    position,
+    rotation,
+    connections: { start: pose.point, end },
+    direction: "right",
+  };
+};
+
+// 与えたレールの「終端」姿勢を返す（次レールの pose に使う）
+const poseFromRailEnd = (rail: Rail): Pose => {
+  const end = rail.connections.end;
+  if (rail.type === "straight") {
+    // pathAngle = -rotation.y
+    const theta = -rail.rotation[1];
+    return { point: end, theta };
+  }
+  // curve: rotation.y = 開始接線方向角
+  const base = rail.rotation[1];
+  const theta = rail.direction === "right" ? base - CURVE_ANGLE : base + CURVE_ANGLE;
+  return { point: end, theta };
 };
 
 const createRail = (x: number, z: number, type: "straight" | "curve"): Rail => {
-  const connection = findBestConnection(x, z, type);
-  let connections = calculateConnections(connection.position, connection.rotation, type);
-  let finalPosition = connection.position;
-
-  // 前の線路がある場合、startを前の線路のendに合わせる
+  // 前のレール終端姿勢（なければ原点+X）
+  let pose: Pose = { point: [0, 0, 0], theta: 0 };
   if (rails.value.length > 0) {
-    const lastRail = rails.value[rails.value.length - 1];
-    connections.start = lastRail.connections.end;
-
-    if (type === "straight") {
-      // 直線レールの場合、startとクリック位置から適切なendとpositionを計算
-      const dx = snapToGrid(x) - connections.start[0];
-      const dz = snapToGrid(z) - connections.start[2];
-      const length = Math.sqrt(dx * dx + dz * dz);
-      const pathAngle = Math.atan2(dz, dx);
-
-      // endを計算
-      connections.end = [
-        connections.start[0] + Math.cos(pathAngle) * length,
-        connections.start[1],
-        connections.start[2] + Math.sin(pathAngle) * length,
-      ] as [number, number, number];
-
-      // positionをstartとendの中点に設定
-      finalPosition = [
-        (connections.start[0] + connections.end[0]) / 2,
-        connections.start[1],
-        (connections.start[2] + connections.end[2]) / 2,
-      ] as [number, number, number];
-
-      // 回転角度を正しく設定（線路の方向に合わせる）
-      connection.rotation = [0, -pathAngle, 0];
-    }
+    pose = poseFromRailEnd(rails.value[rails.value.length - 1]);
+  } else {
+    // 最初はクリック位置をグリッドスナップして開始点にする
+    pose.point = [snapToGrid(x), 0, snapToGrid(z)];
   }
 
-  return {
-    id: `rail-${Date.now()}-${Math.random()}`,
-    type,
-    position: finalPosition,
-    rotation: connection.rotation,
-    connections,
-  };
+  if (type === "straight") {
+    // クリック方向で長さを決める（start→click まで）
+    const dx = snapToGrid(x) - pose.point[0];
+    const dz = snapToGrid(z) - pose.point[2];
+    const length = Math.max(0.0001, Math.hypot(dx, dz));
+    pose.theta = Math.atan2(dz, dx);
+    return makeStraight(pose, length);
+  } else {
+    // クリックが接線の左側か右側かで分岐
+    const leftSide = (() => {
+      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const vx = snapToGrid(x) - pose.point[0];
+      const vz = snapToGrid(z) - pose.point[2];
+      const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
+      return cross > 0; // 左側なら正
+    })();
+    return leftSide ? makeLeftCurve(pose) : makeRightCurve(pose);
+  }
 };
 
 interface ClickEvent {
@@ -432,8 +438,31 @@ const rotateRail = (rail: Rail) => {
   const newRotationY = rail.rotation[1] + Math.PI / 2;
   rail.rotation = [rail.rotation[0], newRotationY, rail.rotation[2]];
 
-  // 接続点を再計算
-  rail.connections = calculateConnections(rail.position, rail.rotation, rail.type);
+  // 接続点を再計算（インライン）
+  const [ix, iy, iz] = rail.position;
+  const [, iry] = rail.rotation;
+  if (rail.type === "straight") {
+    const len = RAIL_STRAIGHT_HALF_LENGTH;
+    const dirX = Math.cos(-iry);
+    const dirZ = Math.sin(-iry);
+    rail.connections = { start: [ix - dirX * len, iy, iz - dirZ * len], end: [ix + dirX * len, iy, iz + dirZ * len] };
+  } else {
+    const r = RAIL_CURVE_RADIUS;
+    const theta = iry;
+    if ((rail.direction || "left") === "left") {
+      // Left curve: start = C - n_left(theta), end = C - n_left(theta + Δ)
+      rail.connections = {
+        start: [ix + Math.sin(theta) * r, iy, iz - Math.cos(theta) * r],
+        end: [ix + Math.sin(theta + CURVE_ANGLE) * r, iy, iz - Math.cos(theta + CURVE_ANGLE) * r],
+      };
+    } else {
+      // Right curve: start = C - n_right(theta), end = C - n_right(theta - Δ)
+      rail.connections = {
+        start: [ix - Math.sin(theta) * r, iy, iz + Math.cos(theta) * r],
+        end: [ix - Math.sin(theta - CURVE_ANGLE) * r, iy, iz + Math.cos(theta - CURVE_ANGLE) * r],
+      };
+    }
+  }
 
   // 周回状態をリセット（回転によって接続が変わる可能性があるため）
   if (isRailsLocked.value) {
@@ -472,22 +501,12 @@ const toggleGameMode = () => {
 const createLargeCircle = () => {
   // 半径2 の 45° カーブ 8本で一周
   rails.value = [];
-  const center: [number, number, number] = [0, 0, 0];
-  const numSegments = 8;
-  const startTheta = Math.PI / 4; // 最初のレールは45°
-
-  for (let i = 0; i < numSegments; i++) {
-    const theta = startTheta + i * CURVE_ANGLE; // 開始接線方向
-    const rail: Rail = {
-      id: `circle-rail-${i}`,
-      type: "curve",
-      // 中心 = (0,0,0) に固定し、start/end は calculateConnections で中心から算出
-      position: [...center],
-      rotation: [0, theta, 0],
-      connections: { start: [0, 0, 0], end: [0, 0, 0] },
-    };
-    rail.connections = calculateConnections(rail.position, rail.rotation, rail.type);
+  const num = 8;
+  let pose: Pose = { point: [0, 0, 0], theta: 0 };
+  for (let i = 0; i < num; i++) {
+    const rail = makeLeftCurve(pose);
     rails.value.push(rail);
+    pose = poseFromRailEnd(rail);
   }
   isRailsLocked.value = true;
   gameMode.value = "run";
@@ -514,46 +533,25 @@ const createOvalPreset = (straightLength?: number) => {
   isRailsLocked.value = false;
   gameMode.value = "build";
 
-  const r = RAIL_CURVE_RADIUS; // カーブ半径
   const straightL =
     typeof straightLength === "number" && !isNaN(straightLength) ? straightLength : RAIL_STRAIGHT_FULL_LENGTH; // 直線1本の長さ（クリックイベント誤渡し対策）
   let theta = 0; // 進行方向角
   let current: [number, number, number] = [0, 0, 0];
 
   const addStraightOne = () => {
-    const start = [...current] as [number, number, number];
-    const dirX = Math.cos(theta);
-    const dirZ = Math.sin(theta);
-    const end: [number, number, number] = [start[0] + dirX * straightL, 0, start[2] + dirZ * straightL];
-    const mid: [number, number, number] = [(start[0] + end[0]) / 2, 0, (start[2] + end[2]) / 2];
-    const rotation: [number, number, number] = [0, -theta, 0];
-    rails.value.push({
-      id: `oval-straight-${rails.value.length}`,
-      type: "straight",
-      position: mid,
-      rotation,
-      connections: { start, end },
-    });
-    current = end;
+    const rail = makeStraight({ point: current, theta }, straightL);
+    rails.value.push(rail);
+    const pose = poseFromRailEnd(rail);
+    current = pose.point;
+    theta = pose.theta;
   };
 
   const addLeftCurve = () => {
-    console.log(current, theta);
-    const centerX = current[0] - Math.sin(theta) * r;
-    const centerZ = current[2] + Math.cos(theta) * r;
-    const position: [number, number, number] = [centerX, 0, centerZ];
-    const rotation: [number, number, number] = [0, theta, 0];
-    const conn = calculateConnections(position, rotation, "curve");
-    conn.start = current;
-    rails.value.push({
-      id: `oval-curve-${rails.value.length}`,
-      type: "curve",
-      position,
-      rotation,
-      connections: conn,
-    });
-    current = conn.end;
-    theta += CURVE_ANGLE;
+    const rail = makeLeftCurve({ point: current, theta });
+    rails.value.push(rail);
+    const pose = poseFromRailEnd(rail);
+    current = pose.point;
+    theta = pose.theta;
   };
 
   // 1: 直線
@@ -567,6 +565,72 @@ const createOvalPreset = (straightLength?: number) => {
 
   isRailsLocked.value = true;
   gameMode.value = "run";
+};
+
+// 左→右の S 字（向きデバッグ用、ループしない）
+const createSCurvePreset = () => {
+  rails.value = [];
+  isRailsLocked.value = false; // ループではない
+  gameMode.value = "build";
+
+  let theta = 0; // +X 方向
+  let current: [number, number, number] = [0, 0, 0];
+
+  // createOvalPreset の addLeftCurve と同一ロジック
+  const addLeftCurveS = () => {
+    const rail = makeLeftCurve({ point: current, theta });
+    rails.value.push(rail);
+    const pose = poseFromRailEnd(rail);
+    current = pose.point;
+    theta = pose.theta;
+  };
+
+  const addRightCurveS = () => {
+    const rail = makeRightCurve({ point: current, theta });
+    rails.value.push(rail);
+    const pose = poseFromRailEnd(rail);
+    current = pose.point;
+    theta = pose.theta;
+  };
+
+  const addStraightOne = () => {
+    const rail = makeStraight({ point: current, theta });
+    rails.value.push(rail);
+    const pose = poseFromRailEnd(rail);
+    current = pose.point;
+    theta = pose.theta;
+  };
+
+  addLeftCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addRightCurveS();
+  addRightCurveS();
+  addStraightOne();
+  addStraightOne();
+  addStraightOne();
+  addRightCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addLeftCurveS();
+  addRightCurveS();
+  addRightCurveS();
+  addRightCurveS();
+  addStraightOne();
+  addStraightOne();
+  addStraightOne();
+  addRightCurveS();
+  addRightCurveS();
 };
 </script>
 

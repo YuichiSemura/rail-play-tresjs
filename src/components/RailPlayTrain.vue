@@ -113,9 +113,11 @@ const getPositionAndRotationOnRail = (
   const centerZ = rail.position[2];
   const radius = RAIL_CURVE_RADIUS;
   const theta = rail.rotation[1]; // 開始接線方向（直線部の進行方向）
-  // 接続点計算で start = C + (sinθ * r, -cosθ * r), end = C + (cosθ * r, sinθ * r)
-  // これに一致する中心角 φ の範囲は φ ∈ [θ-90°, θ] で位置 = C + (cosφ * r, sinφ * r)
-  const phi = theta - Math.PI / 2 + CURVE_ANGLE * t;
+  // 進行方向（左/右）に応じて中心角 φ の進み方が変わる
+  // 左カーブ: φ は θ-90° から +Δ 方向へ進む
+  // 右カーブ: φ は θ+90° から -Δ 方向へ進む
+  const sgn = rail.direction === "right" ? -1 : 1; // left=+1, right=-1
+  const phi = theta - sgn * (Math.PI / 2) + sgn * CURVE_ANGLE * t;
 
   const position: [number, number, number] = [
     centerX + Math.cos(phi) * radius,
@@ -123,9 +125,10 @@ const getPositionAndRotationOnRail = (
     centerZ + Math.sin(phi) * radius,
   ];
 
-  // 進行方向は中心角 - 90°
-  // 接線方向ベクトル = (-sinφ, cosφ)
-  const pathAngle = Math.atan2(-Math.sin(phi), Math.cos(phi));
+  // 接線方向ベクトル：左(-sinφ, cosφ)、右(+sinφ, -cosφ) を sgn で統一
+  const tx = -sgn * Math.sin(phi);
+  const tz = sgn * Math.cos(phi);
+  const pathAngle = Math.atan2(tx, tz);
   // モデルは +Z が前なので yaw = pathAngle
   const yaw = pathAngle;
   const rotation: [number, number, number] = [0, yaw, 0];
