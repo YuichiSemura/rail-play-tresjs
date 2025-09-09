@@ -9,18 +9,18 @@
     <!-- base building block -->
     <TresMesh>
       <TresBoxGeometry :args="[width, height, depth]" />
-  <TresMeshLambertMaterial :color="color" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
+      <TresMeshLambertMaterial :color="color" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
     </TresMesh>
     <!-- simple roof accent -->
     <TresMesh :position="[0, height / 2 + 0.05, 0]">
       <TresBoxGeometry :args="[width * 1.02, 0.1, depth * 1.02]" />
-  <TresMeshLambertMaterial color="#CCCCCC" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
+      <TresMeshLambertMaterial color="#CCCCCC" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
     </TresMesh>
   </TresGroup>
 </template>
 
 <script setup lang="ts">
-defineEmits<{ (e: 'click'): void }>();
+defineEmits<{ (e: "click"): void }>();
 const props = defineProps<{
   position: [number, number, number];
   rotation?: [number, number, number];

@@ -1,11 +1,7 @@
 <template>
   <TresGroup ref="root" @click="onClick">
     <!-- Straight rail -->
-    <TresGroup
-      v-if="rail.type === 'straight'"
-      :key="`straight-${rail.id}`"
-      :position="[0, RAIL_HEIGHT / 2, 0]"
-    >
+    <TresGroup v-if="rail.type === 'straight'" :key="`straight-${rail.id}`" :position="[0, RAIL_HEIGHT / 2, 0]">
       <TresMesh :position="rail.position" :rotation="rail.rotation">
         <TresBoxGeometry :args="[RAIL_STRAIGHT_FULL_LENGTH, RAIL_HEIGHT, RAIL_THICKNESS]" />
         <TresMeshLambertMaterial
@@ -15,6 +11,26 @@
           :side="2"
         />
       </TresMesh>
+    </TresGroup>
+
+    <!-- Slope rail (tilted box to match logical rise) -->
+    <TresGroup v-else-if="rail.type === 'slope'" :key="`slope-${rail.id}`" :position="[0, RAIL_HEIGHT / 2, 0]">
+      <!-- Outer group applies yaw so local X aligns with path -->
+      <TresGroup
+        :position="[rail.position[0], (rail.connections.start[1] + rail.connections.end[1]) / 2, rail.position[2]]"
+        :rotation="[0, -rail.rotation[1], 0]"
+      >
+        <!-- Inner mesh pitched around Z by arctan(dy/run) and length=3D length to preserve horizontal run -->
+        <TresMesh :rotation="[0, 0, Math.atan2(rail.connections.end[1] - rail.connections.start[1], RAIL_SLOPE_RUN)]">
+          <TresBoxGeometry :args="[RAIL_SLOPE_LENGTH_3D, RAIL_HEIGHT, RAIL_THICKNESS]" />
+          <TresMeshLambertMaterial
+            :color="ghost ? '#6AA0FF' : '#4169E1'"
+            :transparent="ghost"
+            :opacity="ghost ? 0.35 : 1"
+            :side="2"
+          />
+        </TresMesh>
+      </TresGroup>
     </TresGroup>
 
     <!-- Left Curve rail-->
@@ -68,6 +84,8 @@ import {
   RAIL_CURVE_OUTER_RADIUS,
   RAIL_HEIGHT,
   RAIL_THICKNESS,
+  RAIL_SLOPE_RUN,
+  RAIL_SLOPE_LENGTH_3D,
 } from "../constants/rail";
 
 const props = defineProps<{

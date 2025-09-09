@@ -9,18 +9,18 @@
     <!-- trunk -->
     <TresMesh :position="[0, trunkHeight / 2, 0]">
       <TresCylinderGeometry :args="[trunkRadius, trunkRadius, trunkHeight, 8]" />
-  <TresMeshLambertMaterial color="#8B5A2B" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
+      <TresMeshLambertMaterial color="#8B5A2B" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
     </TresMesh>
     <!-- foliage -->
     <TresMesh :position="[0, trunkHeight + foliageRadius * 0.9, 0]">
       <TresSphereGeometry :args="[foliageRadius, 12, 12]" />
-  <TresMeshLambertMaterial color="#2E8B57" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
+      <TresMeshLambertMaterial color="#2E8B57" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
     </TresMesh>
   </TresGroup>
 </template>
 
 <script setup lang="ts">
-defineEmits<{ (e: 'click'): void }>();
+defineEmits<{ (e: "click"): void }>();
 const props = defineProps<{
   position: [number, number, number];
   rotation?: [number, number, number];

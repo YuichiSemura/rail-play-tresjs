@@ -26,6 +26,10 @@
                 <v-icon>mdi-rotate-right</v-icon>
                 カーブ
               </v-btn>
+              <v-btn value="slope">
+                <v-icon>mdi-trending-up</v-icon>
+                スロープ
+              </v-btn>
               <v-btn value="tree">
                 <v-icon>mdi-pine-tree</v-icon>
                 木
@@ -33,6 +37,10 @@
               <v-btn value="building">
                 <v-icon>mdi-office-building</v-icon>
                 ビル
+              </v-btn>
+              <v-btn value="pier">
+                <v-icon>mdi-pillar</v-icon>
+                橋脚
               </v-btn>
               <v-btn value="rotate">
                 <v-icon>mdi-rotate-3d-variant</v-icon>
@@ -146,6 +154,17 @@
             <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
               <v-icon>mdi-axis-z-rotate-clockwise</v-icon>
               S字（左→右）
+            </v-btn>
+
+            <v-btn
+              color="secondary"
+              @click="createSlopeUpDownCurvesPreset"
+              :disabled="rails.length > 0"
+              block
+              class="mb-2"
+            >
+              <v-icon>mdi-trending-up</v-icon>
+              スロープありオーバル
             </v-btn>
 
             <v-btn color="warning" @click="clearAllRails" :disabled="rails.length === 0" block>
@@ -268,12 +287,7 @@
           <RailPlayTrain :cars="carTransforms" />
 
           <!-- Trees -->
-          <RailPlayTree
-            v-for="(t, i) in trees"
-            :key="'tree-' + i"
-            :position="t.position"
-            @click="onTreeClick(i)"
-          />
+          <RailPlayTree v-for="(t, i) in trees" :key="'tree-' + i" :position="t.position" @click="onTreeClick(i)" />
 
           <!-- Buildings -->
           <RailPlayBuilding
@@ -283,6 +297,23 @@
             :height="b.height"
             :color="b.color"
             @click="onBuildingClick(i)"
+          />
+
+          <!-- Piers -->
+          <RailPlayPier
+            v-for="(p, i) in piers"
+            :key="'pier-' + i"
+            :position="p.position"
+            :height="p.height || 1.5"
+            @click="onPierClick(i)"
+          />
+
+          <!-- Ghost pier preview -->
+          <RailPlayPier
+            v-if="ghostPier"
+            :position="ghostPier.position"
+            :height="ghostPier.height || 1.5"
+            :ghost="true"
           />
         </TresCanvas>
       </v-col>
@@ -298,17 +329,20 @@ import RailPlayRail from "./RailPlayRail.vue";
 import RailPlayTrain from "./RailPlayTrain.vue";
 import RailPlayTree from "./RailPlayTree.vue";
 import RailPlayBuilding from "./RailPlayBuilding.vue";
+import RailPlayPier from "./RailPlayPier.vue";
 // 共通定数
 import {
   CURVE_SEGMENT_ANGLE as CURVE_ANGLE,
   RAIL_CURVE_RADIUS,
   RAIL_STRAIGHT_FULL_LENGTH,
   RAIL_STRAIGHT_HALF_LENGTH,
+  RAIL_SLOPE_RUN,
+  RAIL_SLOPE_RISE,
 } from "../constants/rail";
 
 export interface Rail {
   id: string;
-  type: "straight" | "curve";
+  type: "straight" | "curve" | "slope";
   position: [number, number, number];
   rotation: [number, number, number];
   connections: {
@@ -322,10 +356,13 @@ type GameMode = "build" | "run";
 type CameraMode = "orbit" | "front";
 
 const gameMode = ref<GameMode>("build");
-const selectedTool = ref<"straight" | "curve" | "tree" | "building" | "rotate" | "delete">("straight");
+const selectedTool = ref<"straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete">(
+  "straight"
+);
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number] }[]>([]);
 const buildings = ref<{ position: [number, number, number]; height?: number; color?: string }[]>([]);
+const piers = ref<{ position: [number, number, number]; height?: number }[]>([]);
 const trainRunning = ref(false);
 // クリア時に列車コンポーネントを確実に破棄・再生成するためのキー
 const trainKey = ref(0);
@@ -336,7 +373,7 @@ const cameraMode = ref<CameraMode>("orbit");
 const cameraPosition = ref<[number, number, number]>([15, 8, 15]);
 const cameraRotation = ref<[number, number, number]>([0, 0, 0]);
 // 列車先頭ビュー時の追従オフセット
-const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.4]; // 少し後ろから車両前方を見る
+const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.4]; // 少し後ろから車両前方を見る（yは車両高さに加算）
 
 // スムージング係数（0-1、小さいほどなめらか）
 const CAM_POS_LERP = 0.18;
@@ -368,17 +405,19 @@ let progressDist = 0;
 
 // レール区間長の簡易計算（従来ロジックを親側に移設）
 const segmentLength = (r: Rail) =>
-  r.type === "straight"
+  r.type === "straight" || r.type === "slope"
     ? Math.hypot(r.connections.end[0] - r.connections.start[0], r.connections.end[2] - r.connections.start[2])
     : RAIL_CURVE_RADIUS * CURVE_ANGLE;
 
 const totalRailLength = () => rails.value.reduce((acc, r) => acc + segmentLength(r), 0);
 
 const getPoseOnRail = (r: Rail, t: number): CarPose => {
-  if (r.type === "straight") {
+  if (r.type === "straight" || r.type === "slope") {
     const sx = r.connections.start[0];
+    const sy = r.connections.start[1];
     const sz = r.connections.start[2];
     const ex = r.connections.end[0];
+    const ey = r.connections.end[1];
     const ez = r.connections.end[2];
     const dx = ex - sx;
     const dz = ez - sz;
@@ -387,8 +426,11 @@ const getPoseOnRail = (r: Rail, t: number): CarPose => {
     const nz = dz / len;
     const x = sx + nx * len * t;
     const z = sz + nz * len * t;
+    const y = sy + (ey - sy) * t + HEIGHT_OFFSET;
     const yaw = Math.atan2(nx, nz);
-    return { position: [x, HEIGHT_OFFSET, z], rotation: [0, yaw, 0] };
+    // pitch: 傾斜角。three.jsの回転規約では上りでマイナス、下りでプラスになるように反転して適用
+    const pitch = Math.atan2(ey - sy, len);
+    return { position: [x, y, z], rotation: [-pitch, yaw, 0] };
   }
   // curve
   const cx = r.position[0];
@@ -401,7 +443,8 @@ const getPoseOnRail = (r: Rail, t: number): CarPose => {
   const tx = -sgn * Math.sin(phi);
   const tz = sgn * Math.cos(phi);
   const yaw = Math.atan2(tx, tz);
-  return { position: [x, HEIGHT_OFFSET, z], rotation: [0, yaw, 0] };
+  const y = r.connections.start[1] + HEIGHT_OFFSET;
+  return { position: [x, y, z], rotation: [0, yaw, 0] };
 };
 
 // 進行を1ステップ進め、carTransforms を更新
@@ -443,8 +486,11 @@ const stepTrain = () => {
     const sl = segmentLength(rails.value[j] || rails.value[0]);
     const tt = Math.max(0, Math.min(1, dd / (sl || 1)));
     const pose = getPoseOnRail(rails.value[j] || rails.value[0], tt);
-    pose.position = [pose.position[0], HEIGHT_OFFSET, pose.position[2]];
-    poses.push(pose);
+    // ピッチのみスムージングして、境目で急に角度が変わらないようにする
+    const prev = carTransforms.value[i];
+    const PITCH_LERP = 0.08; // 0-1 小さいほどなめらか（以前: 0.25 -> よりゆっくり補間）
+    const smoothedPitch = prev ? angleLerp(prev.rotation[0], pose.rotation[0], PITCH_LERP) : pose.rotation[0];
+    poses.push({ position: pose.position, rotation: [smoothedPitch, pose.rotation[1], pose.rotation[2]] });
   }
   carTransforms.value = poses;
   // カメラ追従
@@ -547,6 +593,27 @@ const makeStraight = (pose: Pose, length = RAIL_STRAIGHT_FULL_LENGTH): Rail => {
   };
 };
 
+// スロープレールを返す（start=pose.point, 水平投影長=RAIL_SLOPE_RUN, 上り/下り=ascending）
+const makeSlope = (pose: Pose, ascending = true): Rail => {
+  const start = pose.point;
+  const dirx = Math.cos(pose.theta);
+  const dirz = Math.sin(pose.theta);
+  const rise = ascending ? RAIL_SLOPE_RISE : -RAIL_SLOPE_RISE;
+  const end: [number, number, number] = [
+    start[0] + dirx * RAIL_SLOPE_RUN,
+    start[1] + rise,
+    start[2] + dirz * RAIL_SLOPE_RUN,
+  ];
+  const mid: [number, number, number] = [(start[0] + end[0]) / 2, start[1], (start[2] + end[2]) / 2];
+  return {
+    id: `slope-${Date.now()}-${Math.random()}`,
+    type: "slope",
+    position: mid,
+    rotation: [0, -pose.theta, 0],
+    connections: { start, end },
+  };
+};
+
 // 左カーブ1本（45°）を返す（start=pose.point, θ=pose.theta）
 const makeLeftCurve = (pose: Pose): Rail => {
   const r = RAIL_CURVE_RADIUS;
@@ -596,7 +663,7 @@ const makeRightCurve = (pose: Pose): Rail => {
 // 与えたレールの「終端」姿勢を返す（次レールの pose に使う）
 const poseFromRailEnd = (rail: Rail): Pose => {
   const end = rail.connections.end;
-  if (rail.type === "straight") {
+  if (rail.type === "straight" || rail.type === "slope") {
     // pathAngle = -rotation.y
     const theta = -rail.rotation[1];
     return { point: end, theta };
@@ -607,7 +674,7 @@ const poseFromRailEnd = (rail: Rail): Pose => {
   return { point: end, theta };
 };
 
-const createRail = (x: number, z: number, type: "straight" | "curve"): Rail => {
+const createRail = (x: number, z: number, type: "straight" | "curve" | "slope"): Rail => {
   // 前のレール終端姿勢（なければ原点+X）
   let pose: Pose = { point: [0, 0, 0], theta: 0 };
   if (rails.value.length > 0) {
@@ -630,7 +697,7 @@ const createRail = (x: number, z: number, type: "straight" | "curve"): Rail => {
     }
     // 2本目以降はクリック位置に依存せず、末端の姿勢そのままに固定長で追加
     return makeStraight(pose, RAIL_STRAIGHT_FULL_LENGTH);
-  } else {
+  } else if (type === "curve") {
     // クリックが接線の左側か右側かで分岐
     const leftSide = (() => {
       const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
@@ -640,6 +707,26 @@ const createRail = (x: number, z: number, type: "straight" | "curve"): Rail => {
       return cross > 0; // 左側なら正
     })();
     return leftSide ? makeLeftCurve(pose) : makeRightCurve(pose);
+  } else {
+    // slope（水平投影長=4、上り/下りはクリック位置で決定：前方=上り、後方=下り）
+    const sx = pose.point[0];
+    const sz = pose.point[2];
+    const tx = snapToGrid(x);
+    const tz = snapToGrid(z);
+    if (rails.value.length === 0) {
+      const dx0 = tx - sx;
+      const dz0 = tz - sz;
+      if (Math.hypot(dx0, dz0) > 1e-3) {
+        pose.theta = Math.atan2(dz0, dx0);
+      }
+    }
+    const dirx = Math.cos(pose.theta);
+    const dirz = Math.sin(pose.theta);
+    const vx = tx - sx;
+    const vz = tz - sz;
+    const dot = dirx * vx + dirz * vz; // 前方: dot>=0, 後方: dot<0
+    const ascending = dot >= 0;
+    return makeSlope(pose, ascending);
   }
 };
 
@@ -656,27 +743,32 @@ const lastPointer = ref<{ x: number; z: number } | null>(null);
 const ghostRail = ref<Rail | null>(null);
 const ghostTree = ref<{ position: [number, number, number] } | null>(null);
 const ghostBuilding = ref<{ position: [number, number, number]; height?: number; color?: string } | null>(null);
+const ghostPier = ref<{ position: [number, number, number]; height?: number } | null>(null);
 
 const updateGhost = () => {
   // すべて初期化
   ghostRail.value = null;
   ghostTree.value = null;
   ghostBuilding.value = null;
+  ghostPier.value = null;
 
   if (gameMode.value !== "build") return;
 
   // レールのゴースト
-  if (selectedTool.value === "straight" || selectedTool.value === "curve") {
+  if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
     if (rails.value.length === 0) {
       if (!lastPointer.value) return; // 初回は向き決めに必要
-      ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value);
+      ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value as any);
       return;
     }
     if (selectedTool.value === "straight") {
       ghostRail.value = createRail(0, 0, "straight");
-    } else {
+    } else if (selectedTool.value === "curve") {
       if (!lastPointer.value) return;
       ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve");
+    } else if (selectedTool.value === "slope") {
+      if (!lastPointer.value) return;
+      ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "slope");
     }
     return;
   }
@@ -684,8 +776,8 @@ const updateGhost = () => {
   // 木のゴースト
   if (selectedTool.value === "tree") {
     if (!lastPointer.value) return;
-  const px = snapToGridSize(lastPointer.value.x, 1);
-  const pz = snapToGridSize(lastPointer.value.z, 1);
+    const px = snapToGridSize(lastPointer.value.x, 1);
+    const pz = snapToGridSize(lastPointer.value.z, 1);
     ghostTree.value = { position: [px, 0, pz] };
     return;
   }
@@ -693,9 +785,16 @@ const updateGhost = () => {
   // ビルのゴースト（標準色・高さ）
   if (selectedTool.value === "building") {
     if (!lastPointer.value) return;
-  const px = snapToGridSize(lastPointer.value.x, 1);
-  const pz = snapToGridSize(lastPointer.value.z, 1);
+    const px = snapToGridSize(lastPointer.value.x, 1);
+    const pz = snapToGridSize(lastPointer.value.z, 1);
     ghostBuilding.value = { position: [px, 0, pz], height: 1.8, color: "#7FB3D5" };
+    return;
+  }
+  if (selectedTool.value === "pier") {
+    if (!lastPointer.value) return;
+    const px = snapToGridSize(lastPointer.value.x, 1);
+    const pz = snapToGridSize(lastPointer.value.z, 1);
+    ghostPier.value = { position: [px, 0, pz], height: 1.5 };
     return;
   }
 };
@@ -721,6 +820,14 @@ const addBuildingAt = (x: number, z: number) => {
   }
 };
 
+const addPierAt = (x: number, z: number) => {
+  const px = snapToGridSize(x, 1);
+  const pz = snapToGridSize(z, 1);
+  if (!piers.value.some((p) => Math.hypot(p.position[0] - px, p.position[2] - pz) < 0.1)) {
+    piers.value.push({ position: [px, 0, pz], height: 1.5 });
+  }
+};
+
 const onPlaneClick = (event: ClickEvent) => {
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
 
@@ -732,7 +839,7 @@ const onPlaneClick = (event: ClickEvent) => {
   // クリックでも最終ポインタを更新（カーブのプレビューに必要）
   lastPointer.value = { x: point.x, z: point.z };
 
-  if (selectedTool.value === "straight" || selectedTool.value === "curve") {
+  if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
     const newRail = createRail(point.x, point.z, selectedTool.value);
     rails.value.push(newRail);
     updateGhost();
@@ -744,6 +851,10 @@ const onPlaneClick = (event: ClickEvent) => {
   }
   if (selectedTool.value === "building") {
     addBuildingAt(point.x, point.z);
+    return;
+  }
+  if (selectedTool.value === "pier") {
+    addPierAt(point.x, point.z);
     return;
   }
   // rotate/delete は平面では何もしない
@@ -774,6 +885,16 @@ const rotateRail = (rail: Rail) => {
     const dirX = Math.cos(-iry);
     const dirZ = Math.sin(-iry);
     rail.connections = { start: [ix - dirX * len, iy, iz - dirZ * len], end: [ix + dirX * len, iy, iz + dirZ * len] };
+  } else if (rail.type === "slope") {
+    const len = RAIL_SLOPE_RUN / 2;
+    const dirX = Math.cos(-iry);
+    const dirZ = Math.sin(-iry);
+    const prevStartY = rail.connections.start[1];
+    const prevEndY = rail.connections.end[1];
+    rail.connections = {
+      start: [ix - dirX * len, prevStartY, iz - dirZ * len],
+      end: [ix + dirX * len, prevEndY, iz + dirZ * len],
+    };
   } else {
     const r = RAIL_CURVE_RADIUS;
     const theta = iry;
@@ -831,6 +952,13 @@ const onBuildingClick = (index: number) => {
   }
 };
 
+const onPierClick = (index: number) => {
+  if (gameMode.value !== "build") return;
+  if (selectedTool.value === "delete") {
+    piers.value.splice(index, 1);
+  }
+};
+
 const toggleGameMode = () => {
   if (gameMode.value === "build" && canRunTrain.value) {
     gameMode.value = "run";
@@ -858,6 +986,7 @@ const clearAllRails = () => {
   rails.value = [];
   trees.value = [];
   buildings.value = [];
+  piers.value = [];
   isRailsLocked.value = false;
   gameMode.value = "build";
   trainRunning.value = false;
@@ -866,6 +995,7 @@ const clearAllRails = () => {
   ghostRail.value = null;
   ghostTree.value = null;
   ghostBuilding.value = null;
+  ghostPier.value = null;
   lastPointer.value = null;
   // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
   trainKey.value++;
@@ -1014,6 +1144,35 @@ const createSCurvePreset = () => {
     height: 1.5 + (idx % 3) * 0.6,
     color: colors[idx % colors.length],
   }));
+};
+
+// 坂上り→坂下り→カーブx4→坂上り→坂下り→カーブx4（ループ）
+const createSlopeUpDownCurvesPreset = () => {
+  rails.value = [];
+  isRailsLocked.value = false;
+  gameMode.value = "build";
+
+  let pose: Pose = { point: [0, 0, 0], theta: 0 };
+
+  const add = (r: Rail) => {
+    rails.value.push(r);
+    pose = poseFromRailEnd(r);
+  };
+
+  // 上り→下り
+  add(makeSlope(pose, true));
+  add(makeSlope(pose, false));
+  // カーブ x4（左）
+  for (let i = 0; i < 4; i++) add(makeLeftCurve(pose));
+  // 上り→下り
+  add(makeSlope(pose, true));
+  add(makeSlope(pose, false));
+  // カーブ x4（左）
+  for (let i = 0; i < 4; i++) add(makeLeftCurve(pose));
+
+  // ループ完成しているのでロックして運転モードへ
+  isRailsLocked.value = true;
+  gameMode.value = "run";
 };
 
 // ツールやモード変更、レール本数の変化でプレビューを更新

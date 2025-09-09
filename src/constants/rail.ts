@@ -22,6 +22,13 @@ export const RAIL_CURVE_OUTER_RADIUS = RAIL_CURVE_RADIUS + RAIL_THICKNESS / 2; /
 // カーブレールの垂直方向の厚み（Extrude depth）
 export const RAIL_HEIGHT = 0.1;
 
+// スロープ（ランプ）設定
+// 直線の二倍（長さ4）の間に高さ1上がる
+export const RAIL_SLOPE_RUN = RAIL_STRAIGHT_FULL_LENGTH * 2; // 4
+export const RAIL_SLOPE_RISE = 0.7; // +0.7 上昇
+export const RAIL_SLOPE_PITCH = Math.atan(RAIL_SLOPE_RISE / RAIL_SLOPE_RUN); // 傾斜角 ≈ 14°
+export const RAIL_SLOPE_LENGTH_3D = Math.sqrt(RAIL_SLOPE_RUN ** 2 + RAIL_SLOPE_RISE ** 2);
+
 // 便利まとめ
 export const RAIL_CURVE_RING_ARGS: [number, number, number, number, number, number] = [
   RAIL_CURVE_INNER_RADIUS,
