@@ -54,6 +54,43 @@
 
             <v-divider class="my-4" />
 
+            <v-card-subtitle>プレビュー（デバッグ）</v-card-subtitle>
+            <div class="rails-debug" style="max-height: 140px; overflow-y: auto; font-size: 12px">
+              <div class="mb-2 pa-2" style="background-color: #f5f5f5; border-radius: 4px">
+                <div>
+                  <strong>lastPointer:</strong>
+                  <span v-if="lastPointer"> [{{ lastPointer.x.toFixed(2) }}, {{ lastPointer.z.toFixed(2) }}] </span>
+                  <span v-else>なし</span>
+                </div>
+                <div class="mt-1">
+                  <strong>ghostRail:</strong>
+                  <template v-if="ghostRail">
+                    <div>Type: {{ ghostRail.type }} {{ ghostRail.direction ? `(${ghostRail.direction})` : "" }}</div>
+                    <div>
+                      Position: [
+                      {{ ghostRail.position[0].toFixed(2) }}, {{ ghostRail.position[1].toFixed(2) }},
+                      {{ ghostRail.position[2].toFixed(2) }}
+                      ]
+                    </div>
+                    <div>RotY: {{ ((ghostRail.rotation[1] * 180) / Math.PI).toFixed(1) }}°</div>
+                    <div>
+                      Start: [
+                      {{ ghostRail.connections.start[0].toFixed(2) }}, {{ ghostRail.connections.start[1].toFixed(2) }},
+                      {{ ghostRail.connections.start[2].toFixed(2) }}
+                      ]
+                    </div>
+                    <div>
+                      End: [
+                      {{ ghostRail.connections.end[0].toFixed(2) }}, {{ ghostRail.connections.end[1].toFixed(2) }},
+                      {{ ghostRail.connections.end[2].toFixed(2) }}
+                      ]
+                    </div>
+                  </template>
+                  <span v-else>なし</span>
+                </div>
+              </div>
+            </div>
+
             <v-card-subtitle>Rails データ (デバッグ用)</v-card-subtitle>
             <div class="rails-debug" style="max-height: 300px; overflow-y: auto; font-size: 12px">
               <div
@@ -142,7 +179,12 @@
           <TresDirectionalLight :position="[10, 10, 5]" :intensity="1" cast-shadow />
 
           <!-- Floor -->
-          <TresMesh :rotation="[-Math.PI / 2, 0, 0]" :position="[0, -0.01, 0]" @click="onPlaneClick">
+          <TresMesh
+            :rotation="[-Math.PI / 2, 0, 0]"
+            :position="[0, -0.01, 0]"
+            @click="onPlaneClick"
+            @pointer-move="onPlanePointerMove"
+          >
             <TresPlaneGeometry :args="[50, 50]" />
             <TresMeshLambertMaterial color="#90EE90" :side="2" />
           </TresMesh>
@@ -201,15 +243,11 @@
           <!-- Rails -->
           <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
+          <!-- Ghost rail preview -->
+          <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
+
           <!-- Train -->
-          <RailPlayTrain
-            v-if="rails.length > 0"
-            :key="trainKey"
-            :rails="rails"
-            :speed="trainSpeed"
-            :running="trainRunning"
-            @pose="onTrainPose"
-          />
+          <RailPlayTrain :cars="carTransforms" />
 
           <!-- Trees -->
           <RailPlayTree v-for="(t, i) in trees" :key="'tree-' + i" :position="t.position" />
@@ -229,7 +267,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onUnmounted } from "vue";
 import { TresCanvas } from "@tresjs/core";
 import { OrbitControls } from "@tresjs/cientos";
 import RailPlayRail from "./RailPlayRail.vue";
@@ -293,6 +331,118 @@ const angleLerp = (current: number, target: number, t: number) => {
   while (delta < -Math.PI) delta += Math.PI * 2;
   return current + delta * t;
 };
+
+// ----------------- 列車の姿勢（親側で管理） -----------------
+import { CAR_SPACING, CAR_COUNT, HEIGHT_OFFSET } from "../constants/train";
+type CarPose = { position: [number, number, number]; rotation: [number, number, number] };
+const initialPose: CarPose[] = Array.from({ length: CAR_COUNT }, (_, i) => ({
+  position: [-(i * CAR_SPACING), HEIGHT_OFFSET, 0],
+  rotation: [0, Math.PI / 2, 0],
+}));
+const carTransforms = ref<CarPose[]>(initialPose);
+let progressDist = 0;
+
+// レール区間長の簡易計算（従来ロジックを親側に移設）
+const segmentLength = (r: Rail) =>
+  r.type === "straight"
+    ? Math.hypot(r.connections.end[0] - r.connections.start[0], r.connections.end[2] - r.connections.start[2])
+    : RAIL_CURVE_RADIUS * CURVE_ANGLE;
+
+const totalRailLength = () => rails.value.reduce((acc, r) => acc + segmentLength(r), 0);
+
+const getPoseOnRail = (r: Rail, t: number): CarPose => {
+  if (r.type === "straight") {
+    const sx = r.connections.start[0];
+    const sz = r.connections.start[2];
+    const ex = r.connections.end[0];
+    const ez = r.connections.end[2];
+    const dx = ex - sx;
+    const dz = ez - sz;
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = dx / len;
+    const nz = dz / len;
+    const x = sx + nx * len * t;
+    const z = sz + nz * len * t;
+    const yaw = Math.atan2(nx, nz);
+    return { position: [x, HEIGHT_OFFSET, z], rotation: [0, yaw, 0] };
+  }
+  // curve
+  const cx = r.position[0];
+  const cz = r.position[2];
+  const theta = r.rotation[1];
+  const sgn = r.direction === "right" ? -1 : 1;
+  const phi = theta - sgn * (Math.PI / 2) + sgn * CURVE_ANGLE * t;
+  const x = cx + Math.cos(phi) * RAIL_CURVE_RADIUS;
+  const z = cz + Math.sin(phi) * RAIL_CURVE_RADIUS;
+  const tx = -sgn * Math.sin(phi);
+  const tz = sgn * Math.cos(phi);
+  const yaw = Math.atan2(tx, tz);
+  return { position: [x, HEIGHT_OFFSET, z], rotation: [0, yaw, 0] };
+};
+
+// 進行を1ステップ進め、carTransforms を更新
+const stepTrain = () => {
+  const L = totalRailLength();
+  if (L <= 0) return;
+  // 以前のセマンティクス維持
+  const avgSegLen = rails.value.length > 0 ? L / rails.value.length : 1;
+  progressDist += trainSpeed.value * 0.008 * avgSegLen;
+  const wrap = (v: number, m: number) => ((v % m) + m) % m;
+  progressDist = wrap(progressDist, L);
+
+  // 進行距離に対応する区間を走査
+  let d = progressDist;
+  let idx = 0;
+  for (; idx < rails.value.length; idx++) {
+    const seg = segmentLength(rails.value[idx]);
+    if (d <= seg) break;
+    d -= seg;
+  }
+  const segLen = segmentLength(rails.value[idx] || rails.value[0]);
+  const t = Math.max(0, Math.min(1, d / (segLen || 1)));
+  const lead = getPoseOnRail(rails.value[idx] || rails.value[0], t);
+
+  // 後続車
+  const poses: CarPose[] = [];
+  for (let i = 0; i < CAR_COUNT; i++) {
+    // 先頭から i 台分の距離を戻す
+    let back = progressDist - i * CAR_SPACING;
+    back = wrap(back, L);
+    // 区間再走査
+    let dd = back;
+    let j = 0;
+    for (; j < rails.value.length; j++) {
+      const seg = segmentLength(rails.value[j]);
+      if (dd <= seg) break;
+      dd -= seg;
+    }
+    const sl = segmentLength(rails.value[j] || rails.value[0]);
+    const tt = Math.max(0, Math.min(1, dd / (sl || 1)));
+    const pose = getPoseOnRail(rails.value[j] || rails.value[0], tt);
+    pose.position = [pose.position[0], HEIGHT_OFFSET, pose.position[2]];
+    poses.push(pose);
+  }
+  carTransforms.value = poses;
+  // カメラ追従
+  onTrainPose({ position: lead.position, rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]] });
+};
+
+// アニメーションループ
+let animId: number | null = null;
+const loop = () => {
+  if (gameMode.value === "run" && canRunTrain.value && trainRunning.value) {
+    stepTrain();
+  }
+  animId = requestAnimationFrame(loop);
+};
+if (typeof window !== "undefined") loop();
+
+onUnmounted(() => {
+  if (animId !== null) {
+    cancelAnimationFrame(animId);
+    animId = null;
+  }
+});
 
 const onTrainPose = (payload: { position: [number, number, number]; rotation: [number, number, number] }) => {
   if (cameraMode.value !== "front") return;
@@ -439,12 +589,18 @@ const createRail = (x: number, z: number, type: "straight" | "curve"): Rail => {
   }
 
   if (type === "straight") {
-    // クリック方向で長さを決める（start→click まで）
-    const dx = snapToGrid(x) - pose.point[0];
-    const dz = snapToGrid(z) - pose.point[2];
-    const length = Math.max(0.0001, Math.hypot(dx, dz));
-    pose.theta = Math.atan2(dz, dx);
-    return makeStraight(pose, length);
+    // 固定長で配置し、既存線路がある場合は「末端の向きにのみ」継ぎ足す
+    // 最初の1本のみ、クリック方向で向きを決める（長さは固定）
+    if (rails.value.length === 0) {
+      const dx = snapToGrid(x) - pose.point[0];
+      const dz = snapToGrid(z) - pose.point[2];
+      if (Math.hypot(dx, dz) > 1e-3) {
+        pose.theta = Math.atan2(dz, dx);
+      }
+      return makeStraight(pose, RAIL_STRAIGHT_FULL_LENGTH);
+    }
+    // 2本目以降はクリック位置に依存せず、末端の姿勢そのままに固定長で追加
+    return makeStraight(pose, RAIL_STRAIGHT_FULL_LENGTH);
   } else {
     // クリックが接線の左側か右側かで分岐
     const leftSide = (() => {
@@ -462,18 +618,68 @@ interface ClickEvent {
   intersections?: Array<{
     point: { x: number; y: number; z: number };
   }>;
+  // Tres の Pointer イベントは point を直接持つ場合がある
+  point?: { x: number; y: number; z: number };
 }
+
+// ゴースト用の最後のポインタ座標とプレビューRail
+const lastPointer = ref<{ x: number; z: number } | null>(null);
+const ghostRail = ref<Rail | null>(null);
+
+const updateGhost = () => {
+  if (gameMode.value !== "build") {
+    ghostRail.value = null;
+    return;
+  }
+  if (!(selectedTool.value === "straight" || selectedTool.value === "curve")) {
+    ghostRail.value = null;
+    return;
+  }
+  // rails の末端からのみ
+  if (rails.value.length === 0) {
+    // 初回は向き決めにポインタが必要
+    if (!lastPointer.value) {
+      ghostRail.value = null;
+      return;
+    }
+    ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value);
+    return;
+  }
+  if (selectedTool.value === "straight") {
+    // 2本目以降の直線は末端に固定長で継ぎ足す（ポインタ不要）
+    ghostRail.value = createRail(0, 0, "straight");
+  } else {
+    // カーブは左右判定にポインタが必要
+    if (!lastPointer.value) {
+      ghostRail.value = null;
+      return;
+    }
+    ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve");
+  }
+};
 
 const onPlaneClick = (event: ClickEvent) => {
   if (selectedTool.value === "delete" || selectedTool.value === "rotate") return;
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
 
   const intersect = event.intersections?.[0];
-  if (intersect) {
-    const point = intersect.point;
+  const pointLike = intersect?.point ?? event.point;
+  if (pointLike) {
+    const point = pointLike;
+    // クリックでも最終ポインタを更新（カーブのプレビューに必要）
+    lastPointer.value = { x: point.x, z: point.z };
     const newRail = createRail(point.x, point.z, selectedTool.value as "straight" | "curve");
     rails.value.push(newRail);
+    updateGhost();
   }
+};
+
+const onPlanePointerMove = (event: ClickEvent) => {
+  const intersect = event.intersections?.[0];
+  const pointLike = intersect?.point ?? event.point;
+  if (!pointLike) return;
+  lastPointer.value = { x: pointLike.x, z: pointLike.z };
+  updateGhost();
 };
 
 const onCanvasClick = () => {
@@ -566,6 +772,10 @@ const clearAllRails = () => {
   isRailsLocked.value = false;
   gameMode.value = "build";
   trainRunning.value = false;
+  carTransforms.value = initialPose;
+  // プレビュー類もリセット
+  ghostRail.value = null;
+  lastPointer.value = null;
   // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
   trainKey.value++;
   // 自由視点へ戻す
@@ -714,6 +924,14 @@ const createSCurvePreset = () => {
     color: colors[idx % colors.length],
   }));
 };
+
+// ツールやモード変更、レール本数の変化でプレビューを更新
+watch(selectedTool, () => updateGhost());
+watch(gameMode, () => updateGhost());
+watch(
+  () => rails.value.length,
+  () => updateGhost()
+);
 </script>
 
 <style scoped>

@@ -1,22 +1,37 @@
 <template>
-  <TresGroup @click="onClick">
+  <TresGroup ref="root" @click="onClick">
     <!-- Straight rail -->
-    <TresGroup v-if="rail.type === 'straight'" :position="[0, RAIL_HEIGHT / 2, 0]">
+    <TresGroup
+      v-if="rail.type === 'straight'"
+      :key="`straight-${rail.id}`"
+      :position="[0, RAIL_HEIGHT / 2, 0]"
+    >
       <TresMesh :position="rail.position" :rotation="rail.rotation">
         <TresBoxGeometry :args="[RAIL_STRAIGHT_FULL_LENGTH, RAIL_HEIGHT, RAIL_THICKNESS]" />
-        <TresMeshLambertMaterial color="#4169E1" :side="2" />
+        <TresMeshLambertMaterial
+          :color="ghost ? '#6AA0FF' : '#4169E1'"
+          :transparent="ghost"
+          :opacity="ghost ? 0.35 : 1"
+          :side="2"
+        />
       </TresMesh>
     </TresGroup>
 
     <!-- Left Curve rail-->
     <TresGroup
       v-else-if="rail.type === 'curve' && rail.direction === 'left'"
+      :key="`curve-left-${rail.id}`"
       :position="rail.position"
       :rotation="[0, -rail.rotation[1], 0]"
     >
       <TresGroup v-if="curveGeometry" :rotation="[0, Math.PI / 2, 0]">
         <TresMesh :geometry="curveGeometry" :rotation="[Math.PI / 2, 0, 0]">
-          <TresMeshLambertMaterial :color="'#4169E1'" :side="2" />
+          <TresMeshLambertMaterial
+            :color="ghost ? '#6AA0FF' : '#4169E1'"
+            :transparent="ghost"
+            :opacity="ghost ? 0.35 : 1"
+            :side="2"
+          />
         </TresMesh>
       </TresGroup>
     </TresGroup>
@@ -24,12 +39,18 @@
     <!-- Right Curve rail-->
     <TresGroup
       v-else-if="rail.type === 'curve' && rail.direction === 'right'"
+      :key="`curve-right-${rail.id}`"
       :position="rail.position"
       :rotation="[0, Math.PI - rail.rotation[1], 0]"
     >
       <TresGroup v-if="curveGeometry" :rotation="[0, Math.PI / 2, 0]">
         <TresMesh :geometry="curveGeometry" :rotation="[Math.PI / 2, 0, 0]">
-          <TresMeshLambertMaterial :color="'#4169E1'" :side="2" />
+          <TresMeshLambertMaterial
+            :color="ghost ? '#6AA0FF' : '#4169E1'"
+            :transparent="ghost"
+            :opacity="ghost ? 0.35 : 1"
+            :side="2"
+          />
         </TresMesh>
       </TresGroup>
     </TresGroup>
@@ -38,7 +59,7 @@
 
 <script setup lang="ts">
 import type { Rail } from "./RailPlayGame.vue";
-import { onMounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import * as THREE from "three";
 import {
   RAIL_STRAIGHT_FULL_LENGTH,
@@ -51,6 +72,7 @@ import {
 
 const props = defineProps<{
   rail: Rail;
+  ghost?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -58,13 +80,44 @@ const emit = defineEmits<{
 }>();
 
 const onClick = () => {
+  // ゴーストはクリックを透過（何もしない）
+  if (props.ghost) return;
   emit("click", props.rail);
 };
 
 // Curve geometry (Extrude) 作成
 const curveGeometry = ref<THREE.ExtrudeGeometry | null>(null);
 
-onMounted(() => {
+// ルートグループ参照（レイキャスト無効化用）
+const root = ref<THREE.Group | null>(null);
+
+// ghost時は全子オブジェクトのraycastを無効化して床クリックをブロックしない
+const setGhostRaycast = (ghost: boolean) => {
+  const grp = root.value;
+  if (!grp) return;
+  grp.traverse((obj: THREE.Object3D) => {
+    const anyObj = obj as any;
+    if (ghost) {
+      if (!anyObj.userData) anyObj.userData = {};
+      if (!anyObj.userData.__origRaycast) {
+        anyObj.userData.__origRaycast = anyObj.raycast;
+      }
+      anyObj.raycast = () => null;
+    } else {
+      if (anyObj.userData && anyObj.userData.__origRaycast) {
+        anyObj.raycast = anyObj.userData.__origRaycast;
+        delete anyObj.userData.__origRaycast;
+      }
+    }
+  });
+};
+
+const buildCurveGeometry = () => {
+  // 既存のジオメトリを破棄してから再生成
+  if (curveGeometry.value) {
+    curveGeometry.value.dispose();
+    curveGeometry.value = null;
+  }
   if (props.rail.type !== "curve") return;
   const isRight = props.rail.direction === "right";
   const shape = new THREE.Shape();
@@ -94,5 +147,32 @@ onMounted(() => {
   const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
   geom.translate(0, 0, -RAIL_HEIGHT);
   curveGeometry.value = geom;
+};
+
+onMounted(() => {
+  buildCurveGeometry();
+  setGhostRaycast(!!props.ghost);
+});
+
+// レール情報が変わる度にジオメトリを更新（ゴースト切替含む）
+watch(
+  () => props.rail,
+  () => buildCurveGeometry(),
+  { deep: true }
+);
+
+// ghost切替でレイキャスト可否を更新
+watch(
+  () => props.ghost,
+  (g) => setGhostRaycast(!!g)
+);
+
+onUnmounted(() => {
+  if (curveGeometry.value) {
+    curveGeometry.value.dispose();
+    curveGeometry.value = null;
+  }
+  // 念のためレイキャストを元に戻す
+  setGhostRaycast(false);
 });
 </script>
