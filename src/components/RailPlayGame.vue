@@ -26,6 +26,14 @@
                 <v-icon>mdi-rotate-right</v-icon>
                 カーブ
               </v-btn>
+              <v-btn value="tree">
+                <v-icon>mdi-pine-tree</v-icon>
+                木
+              </v-btn>
+              <v-btn value="building">
+                <v-icon>mdi-office-building</v-icon>
+                ビル
+              </v-btn>
               <v-btn value="rotate">
                 <v-icon>mdi-rotate-3d-variant</v-icon>
                 回転
@@ -246,11 +254,26 @@
           <!-- Ghost rail preview -->
           <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
 
+          <!-- Ghost tree/building preview -->
+          <RailPlayTree v-if="ghostTree" :position="ghostTree.position" :ghost="true" />
+          <RailPlayBuilding
+            v-if="ghostBuilding"
+            :position="ghostBuilding.position"
+            :height="ghostBuilding.height"
+            :color="ghostBuilding.color"
+            :ghost="true"
+          />
+
           <!-- Train -->
           <RailPlayTrain :cars="carTransforms" />
 
           <!-- Trees -->
-          <RailPlayTree v-for="(t, i) in trees" :key="'tree-' + i" :position="t.position" />
+          <RailPlayTree
+            v-for="(t, i) in trees"
+            :key="'tree-' + i"
+            :position="t.position"
+            @click="onTreeClick(i)"
+          />
 
           <!-- Buildings -->
           <RailPlayBuilding
@@ -259,6 +282,7 @@
             :position="b.position"
             :height="b.height"
             :color="b.color"
+            @click="onBuildingClick(i)"
           />
         </TresCanvas>
       </v-col>
@@ -298,7 +322,7 @@ type GameMode = "build" | "run";
 type CameraMode = "orbit" | "front";
 
 const gameMode = ref<GameMode>("build");
-const selectedTool = ref<"straight" | "curve" | "rotate" | "delete">("straight");
+const selectedTool = ref<"straight" | "curve" | "tree" | "building" | "rotate" | "delete">("straight");
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number] }[]>([]);
 const buildings = ref<{ position: [number, number, number]; height?: number; color?: string }[]>([]);
@@ -497,6 +521,11 @@ const snapToGrid = (position: number): number => {
   return Math.round(position / 2) * 2;
 };
 
+// 任意のグリッドサイズでスナップ（木/ビル用に 1u を使用）
+const snapToGridSize = (position: number, size: number): number => {
+  return Math.round(position / size) * size;
+};
+
 // 進行端点の姿勢（接続開始点とその時の進行方向角 θ）
 type Pose = { point: [number, number, number]; theta: number };
 
@@ -625,53 +654,99 @@ interface ClickEvent {
 // ゴースト用の最後のポインタ座標とプレビューRail
 const lastPointer = ref<{ x: number; z: number } | null>(null);
 const ghostRail = ref<Rail | null>(null);
+const ghostTree = ref<{ position: [number, number, number] } | null>(null);
+const ghostBuilding = ref<{ position: [number, number, number]; height?: number; color?: string } | null>(null);
 
 const updateGhost = () => {
-  if (gameMode.value !== "build") {
-    ghostRail.value = null;
-    return;
-  }
-  if (!(selectedTool.value === "straight" || selectedTool.value === "curve")) {
-    ghostRail.value = null;
-    return;
-  }
-  // rails の末端からのみ
-  if (rails.value.length === 0) {
-    // 初回は向き決めにポインタが必要
-    if (!lastPointer.value) {
-      ghostRail.value = null;
+  // すべて初期化
+  ghostRail.value = null;
+  ghostTree.value = null;
+  ghostBuilding.value = null;
+
+  if (gameMode.value !== "build") return;
+
+  // レールのゴースト
+  if (selectedTool.value === "straight" || selectedTool.value === "curve") {
+    if (rails.value.length === 0) {
+      if (!lastPointer.value) return; // 初回は向き決めに必要
+      ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value);
       return;
     }
-    ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value);
+    if (selectedTool.value === "straight") {
+      ghostRail.value = createRail(0, 0, "straight");
+    } else {
+      if (!lastPointer.value) return;
+      ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve");
+    }
     return;
   }
-  if (selectedTool.value === "straight") {
-    // 2本目以降の直線は末端に固定長で継ぎ足す（ポインタ不要）
-    ghostRail.value = createRail(0, 0, "straight");
-  } else {
-    // カーブは左右判定にポインタが必要
-    if (!lastPointer.value) {
-      ghostRail.value = null;
-      return;
-    }
-    ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve");
+
+  // 木のゴースト
+  if (selectedTool.value === "tree") {
+    if (!lastPointer.value) return;
+  const px = snapToGridSize(lastPointer.value.x, 1);
+  const pz = snapToGridSize(lastPointer.value.z, 1);
+    ghostTree.value = { position: [px, 0, pz] };
+    return;
+  }
+
+  // ビルのゴースト（標準色・高さ）
+  if (selectedTool.value === "building") {
+    if (!lastPointer.value) return;
+  const px = snapToGridSize(lastPointer.value.x, 1);
+  const pz = snapToGridSize(lastPointer.value.z, 1);
+    ghostBuilding.value = { position: [px, 0, pz], height: 1.8, color: "#7FB3D5" };
+    return;
+  }
+};
+
+const addTreeAt = (x: number, z: number) => {
+  const px = snapToGridSize(x, 1);
+  const pz = snapToGridSize(z, 1);
+  // 同座標重複を軽減
+  if (!trees.value.some((t) => Math.hypot(t.position[0] - px, t.position[2] - pz) < 0.1)) {
+    trees.value.push({ position: [px, 0, pz] });
+  }
+};
+
+const addBuildingAt = (x: number, z: number) => {
+  const px = snapToGridSize(x, 1);
+  const pz = snapToGridSize(z, 1);
+  if (!buildings.value.some((b) => Math.hypot(b.position[0] - px, b.position[2] - pz) < 0.1)) {
+    // 簡単なバリエーション
+    const palette = ["#7FB3D5", "#85C1E9", "#5DADE2", "#A9CCE3", "#5499C7"];
+    const color = palette[Math.floor(Math.random() * palette.length)];
+    const height = 1.5 + Math.floor(Math.random() * 3) * 0.6;
+    buildings.value.push({ position: [px, 0, pz], height, color });
   }
 };
 
 const onPlaneClick = (event: ClickEvent) => {
-  if (selectedTool.value === "delete" || selectedTool.value === "rotate") return;
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
 
   const intersect = event.intersections?.[0];
   const pointLike = intersect?.point ?? event.point;
-  if (pointLike) {
-    const point = pointLike;
-    // クリックでも最終ポインタを更新（カーブのプレビューに必要）
-    lastPointer.value = { x: point.x, z: point.z };
-    const newRail = createRail(point.x, point.z, selectedTool.value as "straight" | "curve");
+  if (!pointLike) return;
+
+  const point = pointLike;
+  // クリックでも最終ポインタを更新（カーブのプレビューに必要）
+  lastPointer.value = { x: point.x, z: point.z };
+
+  if (selectedTool.value === "straight" || selectedTool.value === "curve") {
+    const newRail = createRail(point.x, point.z, selectedTool.value);
     rails.value.push(newRail);
     updateGhost();
+    return;
   }
+  if (selectedTool.value === "tree") {
+    addTreeAt(point.x, point.z);
+    return;
+  }
+  if (selectedTool.value === "building") {
+    addBuildingAt(point.x, point.z);
+    return;
+  }
+  // rotate/delete は平面では何もしない
 };
 
 const onPlanePointerMove = (event: ClickEvent) => {
@@ -742,6 +817,20 @@ const onRailClick = (rail: Rail) => {
   }
 };
 
+const onTreeClick = (index: number) => {
+  if (gameMode.value !== "build") return;
+  if (selectedTool.value === "delete") {
+    trees.value.splice(index, 1);
+  }
+};
+
+const onBuildingClick = (index: number) => {
+  if (gameMode.value !== "build") return;
+  if (selectedTool.value === "delete") {
+    buildings.value.splice(index, 1);
+  }
+};
+
 const toggleGameMode = () => {
   if (gameMode.value === "build" && canRunTrain.value) {
     gameMode.value = "run";
@@ -775,6 +864,8 @@ const clearAllRails = () => {
   carTransforms.value = initialPose;
   // プレビュー類もリセット
   ghostRail.value = null;
+  ghostTree.value = null;
+  ghostBuilding.value = null;
   lastPointer.value = null;
   // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
   trainKey.value++;
