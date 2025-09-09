@@ -98,16 +98,16 @@
               オーバル生成
             </v-btn>
 
+            <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
+              <v-icon>mdi-axis-z-rotate-clockwise</v-icon>
+              S字（左→右）
+            </v-btn>
+
             <v-btn color="warning" @click="clearAllRails" :disabled="rails.length === 0" block>
               <v-icon>mdi-delete-sweep</v-icon>
               すべてクリア
             </v-btn>
             <v-divider class="my-4" />
-            <v-card-subtitle>方向デバッグ</v-card-subtitle>
-            <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
-              <v-icon>mdi-axis-z-rotate-clockwise</v-icon>
-              S字（左→右）
-            </v-btn>
           </v-card-text>
 
           <v-card-text v-else>
@@ -209,6 +209,18 @@
             :running="trainRunning"
             @pose="onTrainPose"
           />
+
+          <!-- Trees -->
+          <RailPlayTree v-for="(t, i) in trees" :key="'tree-' + i" :position="t.position" />
+
+          <!-- Buildings -->
+          <RailPlayBuilding
+            v-for="(b, i) in buildings"
+            :key="'bld-' + i"
+            :position="b.position"
+            :height="b.height"
+            :color="b.color"
+          />
         </TresCanvas>
       </v-col>
     </v-row>
@@ -221,6 +233,8 @@ import { TresCanvas } from "@tresjs/core";
 import { OrbitControls } from "@tresjs/cientos";
 import RailPlayRail from "./RailPlayRail.vue";
 import RailPlayTrain from "./RailPlayTrain.vue";
+import RailPlayTree from "./RailPlayTree.vue";
+import RailPlayBuilding from "./RailPlayBuilding.vue";
 // 共通定数
 import {
   CURVE_SEGMENT_ANGLE as CURVE_ANGLE,
@@ -247,6 +261,8 @@ type CameraMode = "orbit" | "front";
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<"straight" | "curve" | "rotate" | "delete">("straight");
 const rails = ref<Rail[]>([]);
+const trees = ref<{ position: [number, number, number] }[]>([]);
+const buildings = ref<{ position: [number, number, number]; height?: number; color?: string }[]>([]);
 const trainRunning = ref(false);
 const trainSpeed = ref(1.0);
 const isRailsLocked = ref(false);
@@ -542,6 +558,8 @@ const createLargeCircle = () => {
 
 const clearAllRails = () => {
   rails.value = [];
+  trees.value = [];
+  buildings.value = [];
   isRailsLocked.value = false;
   gameMode.value = "build";
   trainRunning.value = false;
@@ -600,6 +618,8 @@ const createOvalPreset = (straightLength?: number) => {
 // 左→右の S 字（向きデバッグ用、ループしない）
 const createSCurvePreset = () => {
   rails.value = [];
+  trees.value = [];
+  buildings.value = [];
   isRailsLocked.value = false; // ループではない
   gameMode.value = "build";
 
@@ -661,6 +681,29 @@ const createSCurvePreset = () => {
   addStraightOne();
   addRightCurveS();
   addRightCurveS();
+  
+  // 線路の周りに適当にオブジェクトを配置（各5つ）
+  const placeAround = (count: number, distance: number, y: number) => {
+    const items: [number, number, number][] = [];
+    const rnd = (min: number, max: number) => Math.random() * (max - min) + min;
+    for (let i = 0; i < count; i++) {
+      const rail = rails.value[Math.floor(Math.random() * rails.value.length)];
+      if (!rail) continue;
+      const angle = rnd(0, Math.PI * 2);
+      const dx = Math.cos(angle) * distance + rnd(-0.8, 0.8);
+      const dz = Math.sin(angle) * distance + rnd(-0.8, 0.8);
+      const px = rail.position[0] + dx;
+      const pz = rail.position[2] + dz;
+      items.push([px, y, pz]);
+    }
+    return items;
+  };
+
+  const treePos = placeAround(5, 3.0, 0);
+  const bldPos = placeAround(5, 4.5, 0);
+  trees.value = treePos.map((p) => ({ position: p }));
+  const colors = ["#7FB3D5", "#85C1E9", "#5DADE2", "#A9CCE3", "#5499C7"];
+  buildings.value = bldPos.map((p, idx) => ({ position: p, height: 1.5 + (idx % 3) * 0.6, color: colors[idx % colors.length] }));
 };
 </script>
 
