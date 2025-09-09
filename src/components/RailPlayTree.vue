@@ -11,7 +11,6 @@
       <TresMeshLambertMaterial color="#2E8B57" />
     </TresMesh>
   </TresGroup>
-  
 </template>
 
 <script setup lang="ts">

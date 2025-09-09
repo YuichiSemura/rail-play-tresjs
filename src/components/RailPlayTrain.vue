@@ -1,5 +1,12 @@
 <template>
-  <TresGroup :position="trainPosition" :rotation="trainRotation" :scale="[TRAIN_SCALE, TRAIN_SCALE, TRAIN_SCALE]">
+  <!-- 3両（既定）を等間隔で表示 -->
+  <TresGroup
+    v-for="(car, i) in carTransforms"
+    :key="i"
+    :position="car.position"
+    :rotation="car.rotation"
+    :scale="[TRAIN_SCALE, TRAIN_SCALE, TRAIN_SCALE]"
+  >
     <!-- 車体本体（1/3程度に縮小: 元 0.8x0.8x2.2 → スケール適用で実質 0.36x0.36x0.99 相当） -->
     <TresMesh>
       <TresBoxGeometry :args="[0.8, 0.8, 2.2]" />
@@ -59,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import type { Rail } from "./RailPlayGame.vue";
 import { RAIL_CURVE_RADIUS, CURVE_SEGMENT_ANGLE as CURVE_ANGLE } from "../constants/rail";
 
@@ -77,10 +84,28 @@ const emit = defineEmits<{
 const TRAIN_SCALE = 0.3; // さらに縮小
 const BASE_HEIGHT_OFFSET = 1.03; // 元サイズ時
 const HEIGHT_OFFSET = BASE_HEIGHT_OFFSET * TRAIN_SCALE;
-const trainPosition = ref<[number, number, number]>([0, HEIGHT_OFFSET, 0]);
-const trainRotation = ref<[number, number, number]>([0, 0, 0]);
+
+// 車両編成設定（デフォルト3両 / 等間隔）
+const CAR_COUNT = 3;
+// 実車両のおおよその長さ（屋根の 2.3 を基準）と連結余白
+const CAR_LENGTH_WORLD = 2.3 * TRAIN_SCALE; // ≒0.69
+const COUPLER_GAP = 0.16; // 少し余裕
+const CAR_SPACING = CAR_LENGTH_WORLD + COUPLER_GAP; // 各車中心間の距離
+
+// 全車両の姿勢配列
+type Pose = { position: [number, number, number]; rotation: [number, number, number] };
+const carTransforms = ref<Pose[]>(
+  Array.from({ length: CAR_COUNT }, () => ({ position: [0, HEIGHT_OFFSET, 0], rotation: [0, 0, 0] }))
+);
+
+// レール長情報（総延長に基づき距離パラメータで移動）
+let segmentLengths: number[] = [];
+let cumulativeLengths: number[] = [];
+let totalLength = 0;
+
 let animationId: number | null = null;
-let progress = 0;
+// 進捗は距離（ワールド座標）で保持
+let progressDist = 0;
 
 // lerp は現在未使用のため削除（警告抑制）
 
@@ -137,6 +162,54 @@ const getPositionAndRotationOnRail = (
   return { position, rotation };
 };
 
+// レール各区間の長さを計算
+const recomputeLengths = () => {
+  segmentLengths = props.rails.map((r) => {
+    if (r.type === "straight") {
+      const sx = r.connections.start[0];
+      const sz = r.connections.start[2];
+      const ex = r.connections.end[0];
+      const ez = r.connections.end[2];
+      return Math.hypot(ex - sx, ez - sz);
+    } else {
+      // 半径 R の 45°円弧
+      return RAIL_CURVE_RADIUS * CURVE_ANGLE;
+    }
+  });
+  cumulativeLengths = [];
+  let acc = 0;
+  for (let i = 0; i < segmentLengths.length; i++) {
+    cumulativeLengths.push(acc);
+    acc += segmentLengths[i];
+  }
+  totalLength = acc;
+  // 進捗を折り返し
+  if (totalLength > 0) {
+    progressDist = ((progressDist % totalLength) + totalLength) % totalLength;
+  } else {
+    progressDist = 0;
+  }
+};
+
+// 距離 s（0..totalLength）地点の姿勢をサンプリング
+const sampleAtDistance = (s: number): Pose => {
+  if (props.rails.length === 0 || totalLength <= 0) {
+    return { position: [0, HEIGHT_OFFSET, 0], rotation: [0, 0, 0] };
+  }
+  // wrap
+  let d = ((s % totalLength) + totalLength) % totalLength;
+  // 区間を線形探索（本数は大きくない前提）
+  let idx = 0;
+  while (idx < props.rails.length - 1 && d >= cumulativeLengths[idx] + segmentLengths[idx]) {
+    idx++;
+  }
+  const segStart = cumulativeLengths[idx];
+  const segLen = segmentLengths[idx] || 1;
+  const t = Math.max(0, Math.min(1, (d - segStart) / segLen));
+  const { position, rotation } = getPositionAndRotationOnRail(props.rails[idx], t);
+  return { position, rotation };
+};
+
 const step = () => {
   if (props.rails.length === 0) {
     animationId = requestAnimationFrame(step);
@@ -145,19 +218,29 @@ const step = () => {
 
   // 走行中のみ進める
   if (props.running) {
-    progress += props.speed * 0.008;
-    if (progress >= props.rails.length) progress = 0;
+    // 以前のセマンティクス（1フレームに 0.008 セグメント）を実距離へ換算
+    if (totalLength <= 0) recomputeLengths();
+    const avgSegLen = props.rails.length > 0 ? totalLength / props.rails.length : 1;
+    progressDist += props.speed * 0.008 * avgSegLen;
+    if (totalLength > 0) progressDist = ((progressDist % totalLength) + totalLength) % totalLength;
 
-    const currentRailIndex = Math.floor(progress);
-    const railProgress = progress - currentRailIndex;
-    const rail = props.rails[currentRailIndex];
-
-    if (rail) {
-      const { position, rotation } = getPositionAndRotationOnRail(rail, railProgress);
-      trainPosition.value = position;
-      trainRotation.value = rotation;
-      emit("pose", { position, rotation: [rotation[0], rotation[1] - Math.PI, rotation[2]] });
+    // 先頭車のサンプリング
+    const lead = sampleAtDistance(progressDist);
+    // 後続車を等間隔でサンプリング
+    const nextTransforms: Pose[] = [];
+    for (let i = 0; i < CAR_COUNT; i++) {
+      const d = progressDist - i * CAR_SPACING;
+      const pose = sampleAtDistance(d);
+      // 高さ補正
+      pose.position = [pose.position[0], HEIGHT_OFFSET, pose.position[2]];
+      nextTransforms.push(pose);
     }
+    carTransforms.value = nextTransforms;
+    // カメラ用に先頭車の姿勢を emit（従来通り yaw-π を渡す）
+    emit("pose", {
+      position: lead.position,
+      rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]],
+    });
   }
 
   animationId = requestAnimationFrame(step);
@@ -177,9 +260,14 @@ const stopLoop = () => {
 
 onMounted(() => {
   if (props.rails.length > 0) {
-    const { position, rotation } = getPositionAndRotationOnRail(props.rails[0], 0);
-    trainPosition.value = position;
-    trainRotation.value = rotation;
+    recomputeLengths();
+    const init: Pose[] = [];
+    for (let i = 0; i < CAR_COUNT; i++) {
+      const pose = sampleAtDistance(-i * CAR_SPACING);
+      pose.position = [pose.position[0], HEIGHT_OFFSET, pose.position[2]];
+      init.push(pose);
+    }
+    carTransforms.value = init;
   }
   if (props.running) startLoop();
 });
@@ -189,12 +277,20 @@ onUnmounted(() => {
 });
 
 // running の変化で開始/停止
-import { watch } from "vue";
 watch(
   () => props.running,
   (v) => {
     if (v) startLoop();
     else stopLoop();
   }
+);
+
+// レール変更時に長さを再計算
+watch(
+  () => props.rails,
+  () => {
+    recomputeLengths();
+  },
+  { deep: true }
 );
 </script>

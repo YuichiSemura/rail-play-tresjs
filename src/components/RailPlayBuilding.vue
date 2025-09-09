@@ -27,7 +27,7 @@ const props = defineProps<{
 const width = props.width ?? 0.9;
 const depth = props.depth ?? 0.9;
 const height = props.height ?? 1.8;
-const color = props.color ?? '#7FB3D5';
+const color = props.color ?? "#7FB3D5";
 const rotation = props.rotation ?? [0, 0, 0];
 const scale = props.scale ?? [1, 1, 1];
 </script>

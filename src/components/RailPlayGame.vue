@@ -204,6 +204,7 @@
           <!-- Train -->
           <RailPlayTrain
             v-if="rails.length > 0"
+            :key="trainKey"
             :rails="rails"
             :speed="trainSpeed"
             :running="trainRunning"
@@ -264,6 +265,8 @@ const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number] }[]>([]);
 const buildings = ref<{ position: [number, number, number]; height?: number; color?: string }[]>([]);
 const trainRunning = ref(false);
+// クリア時に列車コンポーネントを確実に破棄・再生成するためのキー
+const trainKey = ref(0);
 const trainSpeed = ref(1.0);
 const isRailsLocked = ref(false);
 const cameraMode = ref<CameraMode>("orbit");
@@ -278,11 +281,11 @@ const CAM_POS_LERP = 0.18;
 const CAM_ROT_LERP = 0.12;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const lerp3 = (
-  a: [number, number, number],
-  b: [number, number, number],
-  t: number
-): [number, number, number] => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const lerp3 = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
+  lerp(a[0], b[0], t),
+  lerp(a[1], b[1], t),
+  lerp(a[2], b[2], t),
+];
 
 const angleLerp = (current: number, target: number, t: number) => {
   let delta = target - current;
@@ -563,6 +566,8 @@ const clearAllRails = () => {
   isRailsLocked.value = false;
   gameMode.value = "build";
   trainRunning.value = false;
+  // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
+  trainKey.value++;
   // 自由視点へ戻す
   cameraMode.value = "orbit";
 };
@@ -681,7 +686,7 @@ const createSCurvePreset = () => {
   addStraightOne();
   addRightCurveS();
   addRightCurveS();
-  
+
   // 線路の周りに適当にオブジェクトを配置（各5つ）
   const placeAround = (count: number, distance: number, y: number) => {
     const items: [number, number, number][] = [];
@@ -703,7 +708,11 @@ const createSCurvePreset = () => {
   const bldPos = placeAround(5, 4.5, 0);
   trees.value = treePos.map((p) => ({ position: p }));
   const colors = ["#7FB3D5", "#85C1E9", "#5DADE2", "#A9CCE3", "#5499C7"];
-  buildings.value = bldPos.map((p, idx) => ({ position: p, height: 1.5 + (idx % 3) * 0.6, color: colors[idx % colors.length] }));
+  buildings.value = bldPos.map((p, idx) => ({
+    position: p,
+    height: 1.5 + (idx % 3) * 0.6,
+    color: colors[idx % colors.length],
+  }));
 };
 </script>
 
