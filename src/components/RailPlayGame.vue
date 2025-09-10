@@ -1,8 +1,8 @@
 <template>
-  <v-container fluid class="pa-0" style="height: 100vh">
+  <v-container fluid class="pa-0" style="height: 100%">
     <v-row no-gutters style="height: 100%">
-      <v-col cols="3">
-        <v-card class="h-100 pa-4">
+      <v-col v-if="sidebarOpen" cols="3">
+        <v-card class="h-100 pa-4 overflow-y-auto" style="max-height: calc(100dvh - var(--v-layout-top, 64px))">
           <v-card-title class="d-flex justify-space-between align-center">
             <span>{{ gameMode === "build" ? "レール配置モード" : "運転モード" }}</span>
             <v-btn
@@ -17,7 +17,7 @@
           </v-card-title>
 
           <v-card-text v-if="gameMode === 'build'">
-            <v-btn-toggle v-model="selectedTool" color="primary" mandatory>
+            <v-btn-toggle v-model="selectedTool" color="primary" mandatory class="d-flex flex-wrap">
               <v-btn value="straight">
                 <v-icon>mdi-minus</v-icon>
                 直線
@@ -52,6 +52,10 @@
               </v-btn>
             </v-btn-toggle>
 
+            <div class="text-caption text-medium-emphasis mt-2">
+              回転ショートカット: R/E = ±45°、Shift併用で反転、Q = 0°にリセット
+            </div>
+
             <div v-if="selectedTool === 'rotate'" class="mt-3">
               <v-alert type="info">
                 <v-icon>mdi-information</v-icon>
@@ -67,76 +71,6 @@
             <v-alert v-else-if="rails.length > 0" type="info" class="mt-4">
               線路: {{ rails.length }}本配置済み
             </v-alert>
-
-            <v-divider class="my-4" />
-
-            <v-card-subtitle>プレビュー（デバッグ）</v-card-subtitle>
-            <div class="rails-debug" style="max-height: 140px; overflow-y: auto; font-size: 12px">
-              <div class="mb-2 pa-2" style="background-color: #f5f5f5; border-radius: 4px">
-                <div>
-                  <strong>lastPointer:</strong>
-                  <span v-if="lastPointer"> [{{ lastPointer.x.toFixed(2) }}, {{ lastPointer.z.toFixed(2) }}] </span>
-                  <span v-else>なし</span>
-                </div>
-                <div class="mt-1">
-                  <strong>ghostRail:</strong>
-                  <template v-if="ghostRail">
-                    <div>Type: {{ ghostRail.type }} {{ ghostRail.direction ? `(${ghostRail.direction})` : "" }}</div>
-                    <div>
-                      Position: [
-                      {{ ghostRail.position[0].toFixed(2) }}, {{ ghostRail.position[1].toFixed(2) }},
-                      {{ ghostRail.position[2].toFixed(2) }}
-                      ]
-                    </div>
-                    <div>RotY: {{ ((ghostRail.rotation[1] * 180) / Math.PI).toFixed(1) }}°</div>
-                    <div>
-                      Start: [
-                      {{ ghostRail.connections.start[0].toFixed(2) }}, {{ ghostRail.connections.start[1].toFixed(2) }},
-                      {{ ghostRail.connections.start[2].toFixed(2) }}
-                      ]
-                    </div>
-                    <div>
-                      End: [
-                      {{ ghostRail.connections.end[0].toFixed(2) }}, {{ ghostRail.connections.end[1].toFixed(2) }},
-                      {{ ghostRail.connections.end[2].toFixed(2) }}
-                      ]
-                    </div>
-                  </template>
-                  <span v-else>なし</span>
-                </div>
-              </div>
-            </div>
-
-            <v-card-subtitle>Rails データ (デバッグ用)</v-card-subtitle>
-            <div class="rails-debug" style="max-height: 300px; overflow-y: auto; font-size: 12px">
-              <div
-                v-for="(rail, index) in rails"
-                :key="rail.id"
-                class="mb-2 pa-2"
-                style="background-color: #f5f5f5; border-radius: 4px"
-              >
-                <div>
-                  <strong>Rail {{ index }}:</strong>
-                </div>
-                <div>Type: {{ rail.type }}</div>
-                <div>
-                  Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
-                  {{ rail.position[2].toFixed(2) }}]
-                </div>
-                <div>
-                  Rotation: [{{ rail.rotation[0].toFixed(2) }}, {{ rail.rotation[1].toFixed(2) }},
-                  {{ rail.rotation[2].toFixed(2) }}]
-                </div>
-                <div>
-                  Start: [{{ rail.connections.start[0].toFixed(2) }}, {{ rail.connections.start[1].toFixed(2) }},
-                  {{ rail.connections.start[2].toFixed(2) }}]
-                </div>
-                <div>
-                  End: [{{ rail.connections.end[0].toFixed(2) }}, {{ rail.connections.end[1].toFixed(2) }},
-                  {{ rail.connections.end[2].toFixed(2) }}]
-                </div>
-              </div>
-            </div>
 
             <v-divider class="my-4" />
 
@@ -167,10 +101,148 @@
               スロープありオーバル
             </v-btn>
 
-            <v-btn color="warning" @click="clearAllRails" :disabled="rails.length === 0" block>
+            <v-btn
+              color="warning"
+              @click="clearAllRails"
+              :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+              block
+            >
               <v-icon>mdi-delete-sweep</v-icon>
               すべてクリア
             </v-btn>
+
+            <v-divider class="my-4" />
+
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <v-icon>mdi-bug</v-icon>
+                  デバッグ情報
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <v-card-subtitle>プレビュー（デバッグ）</v-card-subtitle>
+                  <div class="rails-debug" style="max-height: 140px; overflow-y: auto; font-size: 12px">
+                    <div class="mb-2 pa-2" style="background-color: #f5f5f5; border-radius: 4px">
+                      <div>
+                        <strong>lastPointer:</strong>
+                        <span v-if="lastPointer">
+                          [{{ lastPointer.x.toFixed(2) }}, {{ lastPointer.z.toFixed(2) }}]
+                        </span>
+                        <span v-else>なし</span>
+                      </div>
+                      <div class="mt-1">
+                        <strong>ghostRail:</strong>
+                        <template v-if="ghostRail">
+                          <div>
+                            Type: {{ ghostRail.type }} {{ ghostRail.direction ? `(${ghostRail.direction})` : "" }}
+                          </div>
+                          <div>
+                            Position: [
+                            {{ ghostRail.position[0].toFixed(2) }}, {{ ghostRail.position[1].toFixed(2) }},
+                            {{ ghostRail.position[2].toFixed(2) }}
+                            ]
+                          </div>
+                          <div>RotY: {{ ((ghostRail.rotation[1] * 180) / Math.PI).toFixed(1) }}°</div>
+                          <div>
+                            Start: [
+                            {{ ghostRail.connections.start[0].toFixed(2) }},
+                            {{ ghostRail.connections.start[1].toFixed(2) }},
+                            {{ ghostRail.connections.start[2].toFixed(2) }}
+                            ]
+                          </div>
+                          <div>
+                            End: [
+                            {{ ghostRail.connections.end[0].toFixed(2) }},
+                            {{ ghostRail.connections.end[1].toFixed(2) }},
+                            {{ ghostRail.connections.end[2].toFixed(2) }}
+                            ]
+                          </div>
+                        </template>
+                        <span v-else>なし</span>
+                      </div>
+                      <div class="mt-1">
+                        <strong>ghostPier:</strong>
+                        <template v-if="ghostPier">
+                          <div>
+                            Position: [
+                            {{ ghostPier.position[0].toFixed(2) }}, {{ ghostPier.position[1].toFixed(2) }},
+                            {{ ghostPier.position[2].toFixed(2) }}
+                            ]
+                          </div>
+                          <div>
+                            Rotation: [
+                            {{ (ghostPier.rotation?.[0] ?? 0).toFixed(2) }},
+                            {{ (ghostPier.rotation?.[1] ?? 0).toFixed(2) }},
+                            {{ (ghostPier.rotation?.[2] ?? 0).toFixed(2) }}
+                            ]
+                          </div>
+                          <div>Height: {{ ghostPier.height ?? "auto" }}</div>
+                        </template>
+                        <span v-else>なし</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <v-card-subtitle>Rails データ (デバッグ用)</v-card-subtitle>
+                  <div class="rails-debug" style="max-height: 300px; overflow-y: auto; font-size: 12px">
+                    <div
+                      v-for="(rail, index) in rails"
+                      :key="rail.id"
+                      class="mb-2 pa-2"
+                      style="background-color: #f5f5f5; border-radius: 4px"
+                    >
+                      <div>
+                        <strong>Rail {{ index }}:</strong>
+                      </div>
+                      <div>Type: {{ rail.type }}</div>
+                      <div>
+                        Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
+                        {{ rail.position[2].toFixed(2) }}]
+                      </div>
+                      <div>
+                        Rotation: [{{ rail.rotation[0].toFixed(2) }}, {{ rail.rotation[1].toFixed(2) }},
+                        {{ rail.rotation[2].toFixed(2) }}]
+                      </div>
+                      <div>
+                        Start: [{{ rail.connections.start[0].toFixed(2) }}, {{ rail.connections.start[1].toFixed(2) }},
+                        {{ rail.connections.start[2].toFixed(2) }}]
+                      </div>
+                      <div>
+                        End: [{{ rail.connections.end[0].toFixed(2) }}, {{ rail.connections.end[1].toFixed(2) }},
+                        {{ rail.connections.end[2].toFixed(2) }}]
+                      </div>
+                    </div>
+                  </div>
+
+                  <v-card-subtitle class="mt-4">Piers データ (デバッグ用)</v-card-subtitle>
+                  <div class="rails-debug" style="max-height: 240px; overflow-y: auto; font-size: 12px">
+                    <div
+                      v-for="(p, index) in piers"
+                      :key="'pier-' + index"
+                      class="mb-2 pa-2"
+                      style="background-color: #f5f5f5; border-radius: 4px"
+                    >
+                      <div>
+                        <strong>Pier {{ index }}:</strong>
+                      </div>
+                      <div>
+                        Position: [{{ p.position[0].toFixed(2) }}, {{ p.position[1].toFixed(2) }},
+                        {{ p.position[2].toFixed(2) }}]
+                      </div>
+                      <div>
+                        Rotation: [
+                        {{ (p.rotation?.[0] ?? 0).toFixed(2) }}, {{ (p.rotation?.[1] ?? 0).toFixed(2) }},
+                        {{ (p.rotation?.[2] ?? 0).toFixed(2) }}
+                        ]
+                      </div>
+                      <div>Height: {{ p.height ?? "auto" }}</div>
+                    </div>
+                    <div v-if="piers.length === 0" class="text-medium-emphasis">なし</div>
+                  </div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
+
             <v-divider class="my-4" />
           </v-card-text>
 
@@ -189,8 +261,8 @@
         </v-card>
       </v-col>
 
-      <v-col cols="9" class="position-relative">
-        <TresCanvas style="height: 100vh" @click="onCanvasClick">
+      <v-col :cols="sidebarOpen ? 9 : 12" class="position-relative" style="height: 100%">
+        <TresCanvas style="height: 100%" @click="onCanvasClick">
           <!-- Main Camera (orbit / front 共用) -->
           <TresPerspectiveCamera
             :position="cameraPosition"
@@ -270,24 +342,17 @@
           <!-- Rails -->
           <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
-          <!-- Ghost rail preview -->
-          <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
-
-          <!-- Ghost tree/building preview -->
-          <RailPlayTree v-if="ghostTree" :position="ghostTree.position" :ghost="true" />
-          <RailPlayBuilding
-            v-if="ghostBuilding"
-            :position="ghostBuilding.position"
-            :height="ghostBuilding.height"
-            :color="ghostBuilding.color"
-            :ghost="true"
-          />
-
           <!-- Train -->
           <RailPlayTrain :cars="carTransforms" />
 
           <!-- Trees -->
-          <RailPlayTree v-for="(t, i) in trees" :key="'tree-' + i" :position="t.position" @click="onTreeClick(i)" />
+          <RailPlayTree
+            v-for="(t, i) in trees"
+            :key="'tree-' + i"
+            :position="t.position"
+            :rotation="t.rotation"
+            @click="onTreeClick(i)"
+          />
 
           <!-- Buildings -->
           <RailPlayBuilding
@@ -296,23 +361,40 @@
             :position="b.position"
             :height="b.height"
             :color="b.color"
+            :rotation="b.rotation"
             @click="onBuildingClick(i)"
           />
 
           <!-- Piers -->
           <RailPlayPier
             v-for="(p, i) in piers"
-            :key="'pier-' + i"
+            :key="`pier-${piersKey}-${i}`"
             :position="p.position"
-            :height="p.height || 1.5"
+            :height="p.height"
+            :rotation="p.rotation"
             @click="onPierClick(i)"
+          />
+
+          <!-- Ghost rail preview -->
+          <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
+
+          <!-- Ghost tree/building preview -->
+          <RailPlayTree v-if="ghostTree" :position="ghostTree.position" :rotation="ghostTree.rotation" :ghost="true" />
+          <RailPlayBuilding
+            v-if="ghostBuilding"
+            :position="ghostBuilding.position"
+            :height="ghostBuilding.height"
+            :color="ghostBuilding.color"
+            :rotation="ghostBuilding.rotation"
+            :ghost="true"
           />
 
           <!-- Ghost pier preview -->
           <RailPlayPier
             v-if="ghostPier"
             :position="ghostPier.position"
-            :height="ghostPier.height || 1.5"
+            :height="ghostPier.height"
+            :rotation="ghostPier.rotation"
             :ghost="true"
           />
         </TresCanvas>
@@ -322,7 +404,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from "vue";
+import { ref, computed, watch, onUnmounted, onMounted } from "vue";
 import { TresCanvas } from "@tresjs/core";
 import { OrbitControls } from "@tresjs/cientos";
 import RailPlayRail from "./RailPlayRail.vue";
@@ -339,6 +421,9 @@ import {
   RAIL_SLOPE_RUN,
   RAIL_SLOPE_RISE,
 } from "../constants/rail";
+
+// Props
+const { sidebarOpen } = defineProps<{ sidebarOpen: boolean }>();
 
 export interface Rail {
   id: string;
@@ -360,12 +445,15 @@ const selectedTool = ref<"straight" | "curve" | "slope" | "tree" | "building" | 
   "straight"
 );
 const rails = ref<Rail[]>([]);
-const trees = ref<{ position: [number, number, number] }[]>([]);
-const buildings = ref<{ position: [number, number, number]; height?: number; color?: string }[]>([]);
-const piers = ref<{ position: [number, number, number]; height?: number }[]>([]);
+const trees = ref<{ position: [number, number, number]; rotation?: [number, number, number] }[]>([]);
+const buildings = ref<
+  { position: [number, number, number]; height?: number; color?: string; rotation?: [number, number, number] }[]
+>([]);
+const piers = ref<{ position: [number, number, number]; height?: number; rotation?: [number, number, number] }[]>([]);
 const trainRunning = ref(false);
 // クリア時に列車コンポーネントを確実に破棄・再生成するためのキー
 const trainKey = ref(0);
+const piersKey = ref(0);
 const trainSpeed = ref(1.0);
 const isRailsLocked = ref(false);
 const cameraMode = ref<CameraMode>("orbit");
@@ -741,9 +829,37 @@ interface ClickEvent {
 // ゴースト用の最後のポインタ座標とプレビューRail
 const lastPointer = ref<{ x: number; z: number } | null>(null);
 const ghostRail = ref<Rail | null>(null);
-const ghostTree = ref<{ position: [number, number, number] } | null>(null);
-const ghostBuilding = ref<{ position: [number, number, number]; height?: number; color?: string } | null>(null);
-const ghostPier = ref<{ position: [number, number, number]; height?: number } | null>(null);
+const ghostTree = ref<{ position: [number, number, number]; rotation?: [number, number, number] } | null>(null);
+const ghostBuilding = ref<{
+  position: [number, number, number];
+  height?: number;
+  color?: string;
+  rotation?: [number, number, number];
+} | null>(null);
+const ghostPier = ref<{
+  position: [number, number, number];
+  height?: number;
+  rotation?: [number, number, number];
+} | null>(null);
+
+// プレース前回転（ヨー）管理（45°ステップ）
+const placementYaw = ref(0); // radians
+const clampYawStep = (rad: number) => {
+  const twoPi = Math.PI * 2;
+  rad = ((rad % twoPi) + twoPi) % twoPi; // wrap [0, 2π)
+  // 45°単位へスナップ
+  const step = Math.PI / 4;
+  return Math.round(rad / step) * step;
+};
+const rotatePlacement = (deltaSteps: number) => {
+  const step = Math.PI / 4;
+  placementYaw.value = clampYawStep(placementYaw.value + deltaSteps * step);
+  updateGhost();
+};
+const resetPlacementRotation = () => {
+  placementYaw.value = 0;
+  updateGhost();
+};
 
 const updateGhost = () => {
   // すべて初期化
@@ -758,7 +874,48 @@ const updateGhost = () => {
   if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
     if (rails.value.length === 0) {
       if (!lastPointer.value) return; // 初回は向き決めに必要
-      ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value as any);
+      // 初回のみ、placementYaw を反映
+      const desired = clampYawStep(placementYaw.value);
+      const gr = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value as any);
+      if (gr.type === "straight" || gr.type === "slope") {
+        gr.rotation = [gr.rotation[0], desired, gr.rotation[2]];
+        const [ix, iy, iz] = gr.position;
+        const len = gr.type === "straight" ? RAIL_STRAIGHT_HALF_LENGTH : RAIL_SLOPE_RUN / 2;
+        const dirX = Math.cos(-gr.rotation[1]);
+        const dirZ = Math.sin(-gr.rotation[1]);
+        const startY = gr.connections.start[1];
+        const endY = gr.connections.end[1];
+        if (gr.type === "straight") {
+          gr.connections = {
+            start: [ix - dirX * len, iy, iz - dirZ * len],
+            end: [ix + dirX * len, iy, iz + dirZ * len],
+          };
+        } else {
+          gr.connections = {
+            start: [ix - dirX * len, startY, iz - dirZ * len],
+            end: [ix + dirX * len, endY, iz + dirZ * len],
+          };
+        }
+      } else if (gr.type === "curve") {
+        // 望みの接線角に近い方向（左/右）を選択
+        const base = gr.rotation[1];
+        const leftYaw = base + CURVE_ANGLE;
+        const rightYaw = base - CURVE_ANGLE;
+        const norm = (a: number) => {
+          let d = a;
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          return d;
+        };
+        const dL = Math.abs(norm(desired - leftYaw));
+        const dR = Math.abs(norm(desired - rightYaw));
+        // 再生成して一貫性確保
+        const pose: Pose = { point: gr.connections.start, theta: base };
+        const chosen = dL <= dR ? makeLeftCurve(pose) : makeRightCurve(pose);
+        ghostRail.value = chosen;
+        return;
+      }
+      ghostRail.value = gr;
       return;
     }
     if (selectedTool.value === "straight") {
@@ -778,7 +935,7 @@ const updateGhost = () => {
     if (!lastPointer.value) return;
     const px = snapToGridSize(lastPointer.value.x, 1);
     const pz = snapToGridSize(lastPointer.value.z, 1);
-    ghostTree.value = { position: [px, 0, pz] };
+    ghostTree.value = { position: [px, 0, pz], rotation: [0, placementYaw.value, 0] };
     return;
   }
 
@@ -787,14 +944,19 @@ const updateGhost = () => {
     if (!lastPointer.value) return;
     const px = snapToGridSize(lastPointer.value.x, 1);
     const pz = snapToGridSize(lastPointer.value.z, 1);
-    ghostBuilding.value = { position: [px, 0, pz], height: 1.8, color: "#7FB3D5" };
+    ghostBuilding.value = {
+      position: [px, 0, pz],
+      height: 1.8,
+      color: "#7FB3D5",
+      rotation: [0, placementYaw.value, 0],
+    };
     return;
   }
   if (selectedTool.value === "pier") {
     if (!lastPointer.value) return;
     const px = snapToGridSize(lastPointer.value.x, 1);
     const pz = snapToGridSize(lastPointer.value.z, 1);
-    ghostPier.value = { position: [px, 0, pz], height: 1.5 };
+    ghostPier.value = { position: [px, 0, pz], height: 0.7, rotation: [0, placementYaw.value, 0] };
     return;
   }
 };
@@ -804,7 +966,7 @@ const addTreeAt = (x: number, z: number) => {
   const pz = snapToGridSize(z, 1);
   // 同座標重複を軽減
   if (!trees.value.some((t) => Math.hypot(t.position[0] - px, t.position[2] - pz) < 0.1)) {
-    trees.value.push({ position: [px, 0, pz] });
+    trees.value.push({ position: [px, 0, pz], rotation: [0, placementYaw.value, 0] });
   }
 };
 
@@ -816,7 +978,7 @@ const addBuildingAt = (x: number, z: number) => {
     const palette = ["#7FB3D5", "#85C1E9", "#5DADE2", "#A9CCE3", "#5499C7"];
     const color = palette[Math.floor(Math.random() * palette.length)];
     const height = 1.5 + Math.floor(Math.random() * 3) * 0.6;
-    buildings.value.push({ position: [px, 0, pz], height, color });
+    buildings.value.push({ position: [px, 0, pz], height, color, rotation: [0, placementYaw.value, 0] });
   }
 };
 
@@ -824,7 +986,7 @@ const addPierAt = (x: number, z: number) => {
   const px = snapToGridSize(x, 1);
   const pz = snapToGridSize(z, 1);
   if (!piers.value.some((p) => Math.hypot(p.position[0] - px, p.position[2] - pz) < 0.1)) {
-    piers.value.push({ position: [px, 0, pz], height: 1.5 });
+    piers.value.push({ position: [px, 0, pz], height: 0.7, rotation: [0, placementYaw.value, 0] });
   }
 };
 
@@ -840,7 +1002,61 @@ const onPlaneClick = (event: ClickEvent) => {
   lastPointer.value = { x: point.x, z: point.z };
 
   if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
-    const newRail = createRail(point.x, point.z, selectedTool.value);
+    let newRail = createRail(point.x, point.z, selectedTool.value);
+    // 最初の一本は向き調整（R/Eの事前回転）を尊重
+    if (rails.value.length === 0) {
+      if (newRail.type === "straight" || newRail.type === "slope") {
+        newRail.rotation = [newRail.rotation[0], clampYawStep(placementYaw.value), newRail.rotation[2]];
+        // 接続点を再計算（直線/スロープ）
+        const [ix, iy, iz] = newRail.position;
+        const len = newRail.type === "straight" ? RAIL_STRAIGHT_HALF_LENGTH : RAIL_SLOPE_RUN / 2;
+        const dirX = Math.cos(-newRail.rotation[1]);
+        const dirZ = Math.sin(-newRail.rotation[1]);
+        const startY = newRail.connections.start[1];
+        const endY = newRail.connections.end[1];
+        if (newRail.type === "straight") {
+          newRail.connections = {
+            start: [ix - dirX * len, iy, iz - dirZ * len],
+            end: [ix + dirX * len, iy, iz + dirZ * len],
+          };
+        } else {
+          newRail.connections = {
+            start: [ix - dirX * len, startY, iz - dirZ * len],
+            end: [ix + dirX * len, endY, iz + dirZ * len],
+          };
+        }
+      } else if (newRail.type === "curve") {
+        // カーブは開始接線方向（rotation[1]）が placementYaw に一致するよう左右を決め直す
+        // ここでは簡易に：placementYaw に最も近い左右のいずれかを採用
+        const desired = clampYawStep(placementYaw.value);
+        const base = newRail.rotation[1];
+        // 左なら +Δ、右なら -Δ になる想定
+        const leftYaw = base + CURVE_ANGLE;
+        const rightYaw = base - CURVE_ANGLE;
+        const norm = (a: number) => {
+          let d = a;
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          return d;
+        };
+        const dL = Math.abs(norm(desired - leftYaw));
+        const dR = Math.abs(norm(desired - rightYaw));
+        if ((newRail.direction || "left") === "left") {
+          if (dR < dL) {
+            // 左→右に入れ替える: makeRightCurveを再生成
+            const pose = { point: newRail.connections.start, theta: base } as Pose;
+            const rerail = makeRightCurve(pose);
+            newRail = rerail;
+          }
+        } else {
+          if (dL < dR) {
+            const pose = { point: newRail.connections.start, theta: base } as Pose;
+            const rerail = makeLeftCurve(pose);
+            newRail = rerail;
+          }
+        }
+      }
+    }
     rails.value.push(newRail);
     updateGhost();
     return;
@@ -942,6 +1158,11 @@ const onTreeClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     trees.value.splice(index, 1);
+  } else if (selectedTool.value === "rotate") {
+    const t = trees.value[index];
+    if (!t) return;
+    const rot = t.rotation ?? [0, 0, 0];
+    t.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -949,6 +1170,11 @@ const onBuildingClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     buildings.value.splice(index, 1);
+  } else if (selectedTool.value === "rotate") {
+    const b = buildings.value[index];
+    if (!b) return;
+    const rot = b.rotation ?? [0, 0, 0];
+    b.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -956,6 +1182,13 @@ const onPierClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     piers.value.splice(index, 1);
+    // 削除後に強制再マウントでバグ回避
+    piersKey.value++;
+  } else if (selectedTool.value === "rotate") {
+    const p = piers.value[index];
+    if (!p) return;
+    const rot = p.rotation ?? [0, 0, 0];
+    p.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -999,6 +1232,8 @@ const clearAllRails = () => {
   lastPointer.value = null;
   // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
   trainKey.value++;
+  // 橋脚も強制再マウントでリソースをクリア
+  piersKey.value++;
   // 自由視点へ戻す
   cameraMode.value = "orbit";
 };
@@ -1161,11 +1396,19 @@ const createSlopeUpDownCurvesPreset = () => {
 
   // 上り→下り
   add(makeSlope(pose, true));
+  add(makeSlope(pose, true));
+  add(makeStraight(pose));
+  add(makeStraight(pose));
+  add(makeSlope(pose, false));
   add(makeSlope(pose, false));
   // カーブ x4（左）
   for (let i = 0; i < 4; i++) add(makeLeftCurve(pose));
   // 上り→下り
   add(makeSlope(pose, true));
+  add(makeSlope(pose, true));
+  add(makeStraight(pose));
+  add(makeStraight(pose));
+  add(makeSlope(pose, false));
   add(makeSlope(pose, false));
   // カーブ x4（左）
   for (let i = 0; i < 4; i++) add(makeLeftCurve(pose));
@@ -1182,6 +1425,26 @@ watch(
   () => rails.value.length,
   () => updateGhost()
 );
+
+// キーボードショートカット（回転）
+const onKeyDown = (e: KeyboardEvent) => {
+  if (gameMode.value !== "build") return;
+  const shift = e.shiftKey;
+  if (e.key === "r" || e.key === "R") {
+    rotatePlacement(shift ? -2 : 1); // R: +45°, Shift+R: -90°
+  } else if (e.key === "e" || e.key === "E") {
+    rotatePlacement(shift ? 2 : -1); // E: -45°, Shift+E: +90°
+  } else if (e.key === "q" || e.key === "Q") {
+    resetPlacementRotation();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener("keydown", onKeyDown);
+});
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKeyDown);
+});
 </script>
 
 <style scoped>

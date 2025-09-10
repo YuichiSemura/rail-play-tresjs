@@ -1,18 +1,18 @@
 <template>
   <v-app>
-    <v-app-bar color="primary" dark>
-      <v-app-bar-title class="d-flex align-center">
-        <v-icon class="mr-3">mdi-train</v-icon>
-        レール遊びゲーム
-      </v-app-bar-title>
-      <v-spacer />
-      <v-btn v-if="showGame" @click="showGame = false" text>
-        <v-icon>mdi-home</v-icon>
-        ホーム
-      </v-btn>
-    </v-app-bar>
-    
     <v-main>
+      <v-app-bar color="primary" dark>
+        <v-app-bar-nav-icon v-if="showGame" @click="sidebarOpen = !sidebarOpen" />
+        <v-app-bar-title class="d-flex align-center">
+          <v-icon class="mr-3">mdi-train</v-icon>
+          レール遊びゲーム
+        </v-app-bar-title>
+        <v-spacer />
+        <v-btn v-if="showGame" @click="showGame = false" text>
+          <v-icon>mdi-home</v-icon>
+          ホーム
+        </v-btn>
+      </v-app-bar>
       <div v-if="!showGame" class="home-screen">
         <v-container class="fill-height">
           <v-row align="center" justify="center">
@@ -22,11 +22,11 @@
                   <v-icon size="64" class="mb-4 d-block mx-auto">mdi-train</v-icon>
                   レール遊びゲーム
                 </v-card-title>
-                
+
                 <v-card-text class="text-center">
                   <p class="text-h6 mb-4">TresJS + Vue + Vuetify で作る3Dレール配置ゲーム</p>
                   <v-divider class="my-4" />
-                  
+
                   <v-list class="text-left">
                     <v-list-item>
                       <v-list-item-icon>
@@ -36,7 +36,7 @@
                         <v-list-item-title>線路を配置して電車を走らせよう</v-list-item-title>
                       </v-list-item-content>
                     </v-list-item>
-                    
+
                     <v-list-item>
                       <v-list-item-icon>
                         <v-icon color="success">mdi-puzzle</v-icon>
@@ -45,7 +45,7 @@
                         <v-list-item-title>直線とカーブを組み合わせて周回コースを作ろう</v-list-item-title>
                       </v-list-item-content>
                     </v-list-item>
-                    
+
                     <v-list-item>
                       <v-list-item-icon>
                         <v-icon color="info">mdi-rotate-3d-variant</v-icon>
@@ -56,13 +56,9 @@
                     </v-list-item>
                   </v-list>
                 </v-card-text>
-                
+
                 <v-card-actions class="justify-center pb-8">
-                  <v-btn 
-                    color="primary" 
-                    size="large"
-                    @click="startGame"
-                  >
+                  <v-btn color="primary" size="large" @click="startGame">
                     <v-icon class="mr-2">mdi-play</v-icon>
                     ゲームを始める
                   </v-btn>
@@ -72,17 +68,18 @@
           </v-row>
         </v-container>
       </div>
-      
-      <RailPlayGame v-else />
+
+      <RailPlayGame v-else :sidebar-open="sidebarOpen" />
     </v-main>
   </v-app>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import RailPlayGame from './components/RailPlayGame.vue';
+import { ref } from "vue";
+import RailPlayGame from "./components/RailPlayGame.vue";
 
 const showGame = ref(false);
+const sidebarOpen = ref(true);
 
 const startGame = () => {
   showGame.value = true;
@@ -92,6 +89,7 @@ const startGame = () => {
 <style scoped>
 .home-screen {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+  /* 上部バー（v-app-bar）を差し引いた高さにする */
+  min-height: calc(100dvh - var(--v-layout-top, 64px));
 }
 </style>
