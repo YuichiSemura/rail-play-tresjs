@@ -30,364 +30,43 @@
             <h3>{{ getModeTitle(gameMode) }}</h3>
           </v-card-title>
 
-          <v-card-text v-if="gameMode === 'build'">
-            <v-card-subtitle>操作</v-card-subtitle>
-            <v-btn-toggle v-model="selectedTool" color="primary" mandatory class="d-flex flex-wrap pa-2">
-              <v-btn value="straight">
-                <v-icon>mdi-minus</v-icon>
-                直線
-              </v-btn>
-              <v-btn value="curve">
-                <v-icon>mdi-rotate-right</v-icon>
-                カーブ
-              </v-btn>
-              <v-btn value="slope">
-                <v-icon>mdi-trending-up</v-icon>
-                スロープ
-              </v-btn>
-              <v-btn value="tree">
-                <v-icon>mdi-pine-tree</v-icon>
-                木
-              </v-btn>
-              <v-btn value="building">
-                <v-icon>mdi-office-building</v-icon>
-                ビル
-              </v-btn>
-              <v-btn value="pier">
-                <v-icon>mdi-pillar</v-icon>
-                橋脚
-              </v-btn>
-              <v-btn value="rotate">
-                <v-icon>mdi-rotate-3d-variant</v-icon>
-                回転
-              </v-btn>
-              <v-btn value="delete">
-                <v-icon>mdi-delete</v-icon>
-                削除
-              </v-btn>
-            </v-btn-toggle>
+          <BuildPanel
+            v-if="gameMode === 'build'"
+            v-model:selectedTool="selectedTool"
+            :rails="rails"
+            :trees="trees"
+            :buildings="buildings"
+            :piers="piers"
+            :is-rails-locked="isRailsLocked"
+            :has-save-data="hasSaveData()"
+            :save-data-info="saveDataInfo"
+            :last-pointer="lastPointer"
+            :ghost-rail="ghostRail"
+            :ghost-pier="ghostPier"
+            @createLargeCircle="createLargeCircle"
+            @createOvalPreset="createOvalPreset"
+            @createSCurvePreset="createSCurvePreset"
+            @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
+            @clearAllRails="clearAllRails"
+            @handleSaveData="handleSaveData"
+            @handleLoadData="handleLoadData"
+          />
 
-            <div v-if="selectedTool === 'rotate'" class="mt-3">
-              <v-alert type="info"> 回転したいレールをクリックしてください </v-alert>
-            </div>
+          <RunPanel
+            v-else-if="gameMode === 'run'"
+            :can-run-train="canRunTrain"
+            :train-running="trainRunning"
+            v-model:trainSpeed="trainSpeed"
+            :camera-mode="cameraMode"
+            @toggleTrain="toggleTrain"
+            @toggleCameraMode="toggleCameraMode"
+          />
 
-            <v-alert v-if="isRailsLocked" type="success" class="mt-4"> 周回線路が完成！ </v-alert>
-
-            <v-alert v-else-if="rails.length > 0" type="info" class="mt-4">
-              線路: {{ rails.length }}本配置済み
-            </v-alert>
-
-            <v-divider class="my-4" />
-
-            <v-card-subtitle>プリセット線路</v-card-subtitle>
-            <v-row dense class="pa-2">
-              <v-col cols="6">
-                <v-btn color="secondary" @click="createLargeCircle" :disabled="rails.length > 0" block class="mb-2">
-                  <v-icon size="small">mdi-circle-outline</v-icon>
-                  <span class="text-caption">大きな円</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="6">
-                <v-btn color="secondary" @click="createOvalPreset()" :disabled="rails.length > 0" block class="mb-2">
-                  <v-icon size="small">mdi-ellipse-outline</v-icon>
-                  <span class="text-caption">オーバル</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="6">
-                <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
-                  <v-icon size="small">mdi-axis-z-rotate-clockwise</v-icon>
-                  <span class="text-caption">S字</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="6">
-                <v-btn
-                  color="secondary"
-                  @click="createSlopeUpDownCurvesPreset"
-                  :disabled="rails.length > 0"
-                  block
-                  class="mb-2"
-                >
-                  <v-icon size="small">mdi-trending-up</v-icon>
-                  <span class="text-caption">スロープ</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="12">
-                <v-btn
-                  color="warning"
-                  @click="clearAllRails"
-                  :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
-                  block
-                >
-                  <v-icon>mdi-delete-sweep</v-icon>
-                  すべてクリア
-                </v-btn>
-              </v-col>
-            </v-row>
-
-            <v-divider class="my-4" />
-
-            <v-card-subtitle>データ保存・復元</v-card-subtitle>
-            <v-row dense class="pa-2">
-              <v-col cols="6">
-                <v-btn
-                  color="primary"
-                  @click="handleSaveData"
-                  :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
-                  block
-                  class="mb-2"
-                >
-                  <v-icon size="small">mdi-content-save</v-icon>
-                  <span class="text-caption">保存</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="6">
-                <v-btn color="secondary" @click="handleLoadData" :disabled="!hasSaveData()" block class="mb-2">
-                  <v-icon size="small">mdi-upload</v-icon>
-                  <span class="text-caption">復元</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="12">
-                <div v-if="saveDataInfo" class="text-caption text-medium-emphasis mx-2">
-                  保存データ: {{ new Date(saveDataInfo.timestamp).toLocaleString() }}<br />
-                  線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、 ビル{{
-                    saveDataInfo.buildingsCount
-                  }}本、橋脚{{ saveDataInfo.piersCount }}本
-                </div>
-              </v-col>
-            </v-row>
-
-            <v-divider class="my-4" />
-
-            <v-expansion-panels class="pa-2">
-              <v-expansion-panel>
-                <v-expansion-panel-title>
-                  <v-icon>mdi-bug</v-icon>
-                  デバッグ情報
-                </v-expansion-panel-title>
-                <v-expansion-panel-text>
-                  <v-card-subtitle>プレビュー（デバッグ）</v-card-subtitle>
-                  <div class="rails-debug" style="max-height: 140px; overflow-y: auto; font-size: 12px">
-                    <div class="mb-2 pa-2" style="background-color: #f5f5f5; border-radius: 4px">
-                      <div>
-                        <strong>lastPointer:</strong>
-                        <span v-if="lastPointer">
-                          [{{ lastPointer.x.toFixed(2) }}, {{ lastPointer.z.toFixed(2) }}]
-                        </span>
-                        <span v-else>なし</span>
-                      </div>
-                      <div class="mt-1">
-                        <strong>ghostRail:</strong>
-                        <template v-if="ghostRail">
-                          <div>
-                            Type: {{ ghostRail.type }}
-                            {{ ghostRail.type === "curve" ? `(${ghostRail.direction})` : "" }}
-                          </div>
-                          <div>
-                            Position: [
-                            {{ ghostRail.position[0].toFixed(2) }}, {{ ghostRail.position[1].toFixed(2) }},
-                            {{ ghostRail.position[2].toFixed(2) }}
-                            ]
-                          </div>
-                          <div>RotY: {{ ((ghostRail.rotation[1] * 180) / Math.PI).toFixed(1) }}°</div>
-                          <div>
-                            Start: [
-                            {{ ghostRail.connections.start[0].toFixed(2) }},
-                            {{ ghostRail.connections.start[1].toFixed(2) }},
-                            {{ ghostRail.connections.start[2].toFixed(2) }}
-                            ]
-                          </div>
-                          <div>
-                            End: [
-                            {{ ghostRail.connections.end[0].toFixed(2) }},
-                            {{ ghostRail.connections.end[1].toFixed(2) }},
-                            {{ ghostRail.connections.end[2].toFixed(2) }}
-                            ]
-                          </div>
-                        </template>
-                        <span v-else>なし</span>
-                      </div>
-                      <div class="mt-1">
-                        <strong>ghostPier:</strong>
-                        <template v-if="ghostPier">
-                          <div>
-                            Position: [
-                            {{ ghostPier.position[0].toFixed(2) }}, {{ ghostPier.position[1].toFixed(2) }},
-                            {{ ghostPier.position[2].toFixed(2) }}
-                            ]
-                          </div>
-                          <div>
-                            Rotation: [
-                            {{ (ghostPier.rotation?.[0] ?? 0).toFixed(2) }},
-                            {{ (ghostPier.rotation?.[1] ?? 0).toFixed(2) }},
-                            {{ (ghostPier.rotation?.[2] ?? 0).toFixed(2) }}
-                            ]
-                          </div>
-                          <div>Height: {{ ghostPier.height ?? "auto" }}</div>
-                        </template>
-                        <span v-else>なし</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <v-card-subtitle>Rails データ (デバッグ用)</v-card-subtitle>
-                  <div class="rails-debug" style="max-height: 300px; overflow-y: auto; font-size: 12px">
-                    <div
-                      v-for="(rail, index) in rails"
-                      :key="rail.id"
-                      class="mb-2 pa-2"
-                      style="background-color: #f5f5f5; border-radius: 4px"
-                    >
-                      <div>
-                        <strong>Rail {{ index }}:</strong>
-                      </div>
-                      <div>Type: {{ rail.type }}</div>
-                      <div>
-                        Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
-                        {{ rail.position[2].toFixed(2) }}]
-                      </div>
-                      <div>
-                        Rotation: [{{ rail.rotation[0].toFixed(2) }}, {{ rail.rotation[1].toFixed(2) }},
-                        {{ rail.rotation[2].toFixed(2) }}]
-                      </div>
-                      <div>
-                        Start: [{{ rail.connections.start[0].toFixed(2) }}, {{ rail.connections.start[1].toFixed(2) }},
-                        {{ rail.connections.start[2].toFixed(2) }}]
-                      </div>
-                      <div>
-                        End: [{{ rail.connections.end[0].toFixed(2) }}, {{ rail.connections.end[1].toFixed(2) }},
-                        {{ rail.connections.end[2].toFixed(2) }}]
-                      </div>
-                    </div>
-                  </div>
-
-                  <v-card-subtitle class="mt-4">Piers データ (デバッグ用)</v-card-subtitle>
-                  <div class="rails-debug" style="max-height: 240px; overflow-y: auto; font-size: 12px">
-                    <div
-                      v-for="(p, index) in piers"
-                      :key="'pier-' + index"
-                      class="mb-2 pa-2"
-                      style="background-color: #f5f5f5; border-radius: 4px"
-                    >
-                      <div>
-                        <strong>Pier {{ index }}:</strong>
-                      </div>
-                      <div>
-                        Position: [{{ p.position[0].toFixed(2) }}, {{ p.position[1].toFixed(2) }},
-                        {{ p.position[2].toFixed(2) }}]
-                      </div>
-                      <div>
-                        Rotation: [
-                        {{ (p.rotation?.[0] ?? 0).toFixed(2) }}, {{ (p.rotation?.[1] ?? 0).toFixed(2) }},
-                        {{ (p.rotation?.[2] ?? 0).toFixed(2) }}
-                        ]
-                      </div>
-                      <div>Height: {{ p.height ?? "auto" }}</div>
-                    </div>
-                    <div v-if="piers.length === 0" class="text-medium-emphasis">なし</div>
-                  </div>
-                </v-expansion-panel-text>
-              </v-expansion-panel>
-            </v-expansion-panels>
-
-            <v-divider class="my-4" />
-          </v-card-text>
-
-          <v-card-text v-else-if="gameMode === 'run'">
-            <v-btn color="success" :disabled="!canRunTrain" @click="toggleTrain" block class="mb-3">
-              {{ trainRunning ? "停止" : "走らせる" }}
-            </v-btn>
-
-            <v-btn color="secondary" :disabled="!canRunTrain" @click="toggleCameraMode" block class="mb-3">
-              <v-icon class="mr-1">{{ cameraMode === "orbit" ? "mdi-train" : "mdi-orbit" }}</v-icon>
-              {{ cameraMode === "orbit" ? "先頭カメラ" : "自由視点" }}
-            </v-btn>
-
-            <v-slider v-model="trainSpeed" :min="0.1" :max="2.0" :step="0.1" label="速度" />
-          </v-card-text>
-
-          <v-card-text v-else-if="gameMode === 'customize'">
-            <v-card-subtitle>電車の色設定</v-card-subtitle>
-
-            <div class="mb-4">
-              <v-label class="mb-2">車体色</v-label>
-              <div class="d-flex align-center">
-                <input type="color" v-model="trainCustomization.bodyColor" class="color-picker mr-3" />
-                <v-text-field
-                  v-model="trainCustomization.bodyColor"
-                  dense
-                  hide-details
-                  variant="outlined"
-                  style="max-width: 120px"
-                />
-              </div>
-            </div>
-
-            <div class="mb-4">
-              <v-label class="mb-2">屋根色</v-label>
-              <div class="d-flex align-center">
-                <input type="color" v-model="trainCustomization.roofColor" class="color-picker mr-3" />
-                <v-text-field
-                  v-model="trainCustomization.roofColor"
-                  dense
-                  hide-details
-                  variant="outlined"
-                  style="max-width: 120px"
-                />
-              </div>
-            </div>
-
-            <div class="mb-4">
-              <v-label class="mb-2">窓色</v-label>
-              <div class="d-flex align-center">
-                <input type="color" v-model="trainCustomization.windowColor" class="color-picker mr-3" />
-                <v-text-field
-                  v-model="trainCustomization.windowColor"
-                  dense
-                  hide-details
-                  variant="outlined"
-                  style="max-width: 120px"
-                />
-              </div>
-            </div>
-
-            <div class="mb-4">
-              <v-label class="mb-2">車輪色</v-label>
-              <div class="d-flex align-center">
-                <input type="color" v-model="trainCustomization.wheelColor" class="color-picker mr-3" />
-                <v-text-field
-                  v-model="trainCustomization.wheelColor"
-                  dense
-                  hide-details
-                  variant="outlined"
-                  style="max-width: 120px"
-                />
-              </div>
-            </div>
-
-            <v-divider class="my-4" />
-
-            <v-card-subtitle>プリセット</v-card-subtitle>
-            <v-row dense>
-              <v-col cols="6">
-                <v-btn color="primary" @click="applyPreset('default')" block class="mb-2">
-                  <v-icon size="small">mdi-restore</v-icon>
-                  <span class="text-caption">デフォルト</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="6">
-                <v-btn color="secondary" @click="applyPreset('red')" block class="mb-2">
-                  <v-icon size="small">mdi-palette</v-icon>
-                  <span class="text-caption">赤い電車</span>
-                </v-btn>
-              </v-col>
-              <v-col cols="6">
-                <v-btn color="success" @click="applyPreset('green')" block class="mb-2">
-                  <v-icon size="small">mdi-palette</v-icon>
-                  <span class="text-caption">緑の電車</span>
-                </v-btn>
-              </v-col>
-            </v-row>
-          </v-card-text>
+          <CustomizePanel
+            v-else-if="gameMode === 'customize'"
+            v-model:trainCustomization="trainCustomization"
+            @applyPreset="applyPreset"
+          />
         </v-card>
       </v-col>
 
@@ -437,7 +116,11 @@ import { useStorageStore } from "../stores/storage";
 import { useRailsGeometry } from "../composables/useRailsGeometry";
 import { useGhostPreview } from "../composables/useGhostPreview";
 import { useTrainRunner } from "../composables/useTrainRunner";
+import { useCameraController } from "../composables/useCameraController";
 import RailPlayScene from "./scene/RailPlayScene.vue";
+import BuildPanel from "./panels/BuildPanel.vue";
+import RunPanel from "./panels/RunPanel.vue";
+import CustomizePanel from "./panels/CustomizePanel.vue";
 import type { Rail, Pose } from "../types/rail";
 import HelpDialog from "./panels/HelpDialog.vue";
 // 共通定数
@@ -455,7 +138,6 @@ const { sidebarOpen } = defineProps<{ sidebarOpen: boolean }>();
 // Rail は共通型を使用
 
 type GameMode = "build" | "run" | "customize";
-type CameraMode = "orbit" | "front";
 
 // 電車のカスタマイズ設定
 interface TrainCustomization {
@@ -503,58 +185,14 @@ const trainCustomization = ref<TrainCustomization>({
 // ヘルプモーダルの状態管理
 const helpDialog = ref(false);
 const isRailsLocked = ref(false);
-const cameraMode = ref<CameraMode>("orbit");
-// カメラ姿勢（orbit モード初期位置）
-const cameraPosition = ref<[number, number, number]>([15, 8, 15]);
-const cameraRotation = ref<[number, number, number]>([0, 0, 0]);
-// 列車先頭ビュー時の追従オフセット
-const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.4]; // 少し後ろから車両前方を見る（yは車両高さに加算）
 
-// スムージング係数（0-1、小さいほどなめらか）
-const CAM_POS_LERP = 0.18;
-const CAM_ROT_LERP = 0.12;
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const lerp3 = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
-  lerp(a[0], b[0], t),
-  lerp(a[1], b[1], t),
-  lerp(a[2], b[2], t),
-];
-
-const angleLerp = (current: number, target: number, t: number) => {
-  let delta = target - current;
-  while (delta > Math.PI) delta -= Math.PI * 2;
-  while (delta < -Math.PI) delta += Math.PI * 2;
-  return current + delta * t;
-};
+// カメラ制御（composable）
+const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrbit, handleTrainPose } = useCameraController();
 
 // 幾何ロジック（切り出し）
 const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, poseFromRailEnd } = useRailsGeometry();
 
-// カメラ追従のためのコールバック関数
-const handleTrainPose = (payload: { position: [number, number, number]; rotation: [number, number, number] }) => {
-  if (cameraMode.value !== "front") return;
-  const [px, py, pz] = payload.position;
-  const [, yaw] = payload.rotation;
-  // yaw に基づきローカルオフセットを回転
-  const ox = FRONT_OFFSET[0] * Math.cos(yaw) - FRONT_OFFSET[2] * Math.sin(yaw);
-  const oz = FRONT_OFFSET[0] * Math.sin(yaw) + FRONT_OFFSET[2] * Math.cos(yaw);
-  const targetPos: [number, number, number] = [px - ox, py + FRONT_OFFSET[1], pz + oz];
-  const targetYaw = yaw;
 
-  // 現在値から目標へ補間
-  cameraPosition.value = lerp3(cameraPosition.value, targetPos, CAM_POS_LERP);
-  cameraRotation.value = [0, angleLerp(cameraRotation.value[1], targetYaw, CAM_ROT_LERP), 0];
-};
-
-
-// モード切替時に orbit 初期姿勢へ戻す
-watch(cameraMode, (m) => {
-  if (m === "orbit") {
-    cameraPosition.value = [15, 8, 15];
-    cameraRotation.value = [0, 0, 0];
-  }
-});
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -953,7 +591,7 @@ const clearAllRails = () => {
   // 橋脚も強制再マウントでリソースをクリア
   piersKey.value++;
   // 自由視点へ戻す
-  cameraMode.value = "orbit";
+  resetToOrbit();
 };
 
 // ゲームデータの保存・復元機能（Pinia ストア利用）
@@ -1011,9 +649,7 @@ const loadGameData = () => {
   resetGhosts();
 
   // カメラを初期位置に戻す
-  cameraMode.value = "orbit";
-  cameraPosition.value = [15, 8, 15];
-  cameraRotation.value = [0, 0, 0];
+  resetToOrbit();
 
   const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
   showNotification(`ゲームデータを復元しました（${totalItems}個のオブジェクト）`, "success");
@@ -1055,9 +691,6 @@ const toggleTrain = () => {
   trainRunning.value = !trainRunning.value;
 };
 
-const toggleCameraMode = () => {
-  cameraMode.value = cameraMode.value === "orbit" ? "front" : "orbit";
-};
 
 // モード切替とカスタマイズ関数
 const getModeTitle = (mode: GameMode) => {
