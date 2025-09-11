@@ -127,7 +127,7 @@
     <!-- Piers -->
     <RailPlayPier
       v-for="(p, i) in piers"
-      :key="`pier-${piersKey}-${i}`"
+      :key="'pier-' + i"
       :position="p.position"
       :height="p.height"
       :rotation="p.rotation"
@@ -197,7 +197,6 @@ interface Props {
     rotation?: [number, number, number];
   }[];
   piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
-  piersKey: number;
 
   // 列車関連
   carTransforms: { position: [number, number, number]; rotation: [number, number, number] }[];

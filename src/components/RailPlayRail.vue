@@ -111,7 +111,7 @@
 
 <script setup lang="ts">
 import type { Rail } from "../types/rail";
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import * as THREE from "three";
 import RailPlayStation from "./RailPlayStation.vue";
 import RailPlayCrossing from "./RailPlayCrossing.vue";
@@ -143,30 +143,6 @@ const onClick = () => {
 
 // Curve geometry (Extrude) 作成
 const curveGeometry = ref<THREE.ExtrudeGeometry | null>(null);
-
-// ルートグループ参照（レイキャスト無効化用）
-const root = ref<THREE.Group | null>(null);
-
-// ghost時は全子オブジェクトのraycastを無効化して床クリックをブロックしない
-const setGhostRaycast = (ghost: boolean) => {
-  const grp = root.value;
-  if (!grp) return;
-  grp.traverse((obj: THREE.Object3D) => {
-    const anyObj = obj as any;
-    if (ghost) {
-      if (!anyObj.userData) anyObj.userData = {};
-      if (!anyObj.userData.__origRaycast) {
-        anyObj.userData.__origRaycast = anyObj.raycast;
-      }
-      anyObj.raycast = () => null;
-    } else {
-      if (anyObj.userData && anyObj.userData.__origRaycast) {
-        anyObj.raycast = anyObj.userData.__origRaycast;
-        delete anyObj.userData.__origRaycast;
-      }
-    }
-  });
-};
 
 const buildCurveGeometry = () => {
   // 既存のジオメトリを破棄してから再生成
@@ -207,7 +183,6 @@ const buildCurveGeometry = () => {
 
 onMounted(() => {
   buildCurveGeometry();
-  setGhostRaycast(!!props.ghost);
 });
 
 // レール情報が変わる度にジオメトリを更新（ゴースト切替含む）
@@ -216,19 +191,4 @@ watch(
   () => buildCurveGeometry(),
   { deep: true }
 );
-
-// ghost切替でレイキャスト可否を更新
-watch(
-  () => props.ghost,
-  (g) => setGhostRaycast(!!g)
-);
-
-onUnmounted(() => {
-  if (curveGeometry.value) {
-    curveGeometry.value.dispose();
-    curveGeometry.value = null;
-  }
-  // 念のためレイキャストを元に戻す
-  setGhostRaycast(false);
-});
 </script>

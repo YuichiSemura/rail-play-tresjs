@@ -85,7 +85,6 @@
           :trees="trees"
           :buildings="buildings"
           :piers="piers"
-          :piers-key="piersKey"
           :car-transforms="carTransforms"
           :train-customization="trainCustomization"
           :ghost-rail="ghostRail"
@@ -184,7 +183,6 @@ const piers = ref<{ position: [number, number, number]; height?: number; rotatio
 const trainRunning = ref(false);
 // クリア時に列車コンポーネントを確実に破棄・再生成するためのキー
 const trainKey = ref(0);
-const piersKey = ref(0);
 const trainSpeed = ref(1.0);
 
 // 保存データ情報（リアクティブ）- 初期化は後で行う
@@ -665,8 +663,6 @@ const onPierClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     piers.value.splice(index, 1);
-    // 削除後に強制再マウントでバグ回避
-    piersKey.value++;
   } else if (selectedTool.value === "rotate") {
     const p = piers.value[index];
     if (!p) return;
@@ -722,8 +718,6 @@ const clearAllRails = () => {
   resetGhosts();
   // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
   trainKey.value++;
-  // 橋脚も強制再マウントでリソースをクリア
-  piersKey.value++;
   // 自由視点へ戻す
   resetToOrbit();
 };
@@ -768,9 +762,8 @@ const loadGameData = () => {
   gameMode.value = saveData.gameMode || "build";
   isRailsLocked.value = saveData.isRailsLocked || false;
 
-  // 列車と橋脚の強制再マウント
+  // 列車の強制再マウント
   trainKey.value++;
-  piersKey.value++;
 
   // ゴーストをクリア
   resetGhosts();
@@ -925,7 +918,6 @@ const handleLoadManual1 = () => {
     currentTitle.value = saveData.title || "";
 
     trainKey.value++;
-    piersKey.value++;
     resetGhosts();
     resetToOrbit();
 
@@ -981,7 +973,6 @@ const handleLoadManual2 = () => {
     currentTitle.value = saveData.title || "";
 
     trainKey.value++;
-    piersKey.value++;
     resetGhosts();
     resetToOrbit();
 
