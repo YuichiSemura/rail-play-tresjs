@@ -26,13 +26,17 @@
         <v-icon>mdi-office-building</v-icon>
         ビル
       </v-btn>
-      <v-btn value="pier">
-        <v-icon>mdi-pillar</v-icon>
-        橋脚
+      <v-btn value="crossing" :disabled="isRailsLocked">
+        <v-icon>mdi-boom-gate</v-icon>
+        踏切
       </v-btn>
       <v-btn value="station" :disabled="isRailsLocked">
         <v-icon>mdi-train</v-icon>
         駅ホーム
+      </v-btn>
+      <v-btn value="pier">
+        <v-icon>mdi-pillar</v-icon>
+        橋脚
       </v-btn>
       <v-btn value="rotate">
         <v-icon>mdi-rotate-3d-variant</v-icon>
@@ -326,6 +330,7 @@ interface Props {
     | "building"
     | "pier"
     | "station"
+    | "crossing"
     | "rotate"
     | "delete";
   currentTitle: string;
@@ -353,7 +358,18 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:selectedTool": [
-    value: "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"
+    value:
+      | "none"
+      | "straight"
+      | "curve"
+      | "slope"
+      | "tree"
+      | "building"
+      | "pier"
+      | "station"
+      | "crossing"
+      | "rotate"
+      | "delete"
   ];
   "update:currentTitle": [value: string];
   createLargeCircle: [];
@@ -370,8 +386,20 @@ const emit = defineEmits<{
 // v-model bridge for selectedTool
 const selectedToolProxy = computed({
   get: () => props.selectedTool,
-  set: (v: "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete") =>
-    emit("update:selectedTool", v),
+  set: (
+    v:
+      | "none"
+      | "straight"
+      | "curve"
+      | "slope"
+      | "tree"
+      | "building"
+      | "pier"
+      | "station"
+      | "crossing"
+      | "rotate"
+      | "delete"
+  ) => emit("update:selectedTool", v),
 });
 
 // v-model bridge for currentTitle
@@ -385,7 +413,7 @@ watch(
   () => props.isRailsLocked,
   (isLocked) => {
     if (isLocked) {
-      const railTools = ["straight", "curve", "slope", "station"];
+      const railTools = ["straight", "curve", "slope", "station", "crossing"];
       if (railTools.includes(props.selectedTool)) {
         emit("update:selectedTool", "tree");
       }

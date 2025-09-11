@@ -88,6 +88,24 @@
       <!-- プラットフォーム部分 -->
       <RailPlayStation :position="rail.position" :rotation="rail.rotation" :ghost="ghost" />
     </TresGroup>
+
+    <!-- Crossing rail (same as straight rail but with crossing hardware on both sides) -->
+    <TresGroup v-else-if="rail.type === 'crossing'" :key="`crossing-${rail.id}`">
+      <!-- レール部分 -->
+      <TresGroup :position="[0, RAIL_HEIGHT / 2, 0]">
+        <TresMesh :position="rail.position" :rotation="rail.rotation">
+          <TresBoxGeometry :args="[RAIL_STRAIGHT_FULL_LENGTH, RAIL_HEIGHT, RAIL_THICKNESS]" />
+          <TresMeshLambertMaterial
+            :color="ghost ? '#6AA0FF' : '#4169E1'"
+            :transparent="ghost"
+            :opacity="ghost ? 0.35 : 1"
+            :side="2"
+          />
+        </TresMesh>
+      </TresGroup>
+      <!-- 踏切本体 -->
+      <RailPlayCrossing :position="rail.position" :rotation="rail.rotation" :ghost="ghost" />
+    </TresGroup>
   </TresGroup>
 </template>
 
@@ -96,6 +114,7 @@ import type { Rail } from "../types/rail";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import * as THREE from "three";
 import RailPlayStation from "./RailPlayStation.vue";
+import RailPlayCrossing from "./RailPlayCrossing.vue";
 import {
   RAIL_STRAIGHT_FULL_LENGTH,
   CURVE_SEGMENT_ANGLE,

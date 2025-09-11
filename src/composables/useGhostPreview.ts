@@ -25,7 +25,7 @@ export function useGhostPreview(
   rails: Ref<Rail[]>,
   selectedTool: Ref<string>,
   gameMode: Ref<string>,
-  createRail: (x: number, z: number, type: "straight" | "curve" | "slope" | "station") => Rail
+  createRail: (x: number, z: number, type: "straight" | "curve" | "slope" | "station" | "crossing") => Rail
 ) {
   const { makeLeftCurve, makeRightCurve } = useRailsGeometry();
 
@@ -85,7 +85,8 @@ export function useGhostPreview(
       selectedTool.value === "straight" ||
       selectedTool.value === "curve" ||
       selectedTool.value === "slope" ||
-      selectedTool.value === "station"
+      selectedTool.value === "station" ||
+      selectedTool.value === "crossing"
     ) {
       if (rails.value.length === 0) {
         if (!lastPointer.value) return; // 初回は向き決めに必要
@@ -94,9 +95,9 @@ export function useGhostPreview(
         const gr = createRail(
           lastPointer.value.x,
           lastPointer.value.z,
-          selectedTool.value as "straight" | "curve" | "slope"
+          selectedTool.value as "straight" | "curve" | "slope" | "station" | "crossing"
         );
-        if (gr.type === "straight" || gr.type === "slope" || gr.type === "station") {
+        if (gr.type === "straight" || gr.type === "slope" || gr.type === "station" || gr.type === "crossing") {
           gr.rotation = [gr.rotation[0], desired, gr.rotation[2]];
           const [ix, iy, iz] = gr.position;
           const len = gr.type === "straight" ? RAIL_STRAIGHT_HALF_LENGTH : RAIL_SLOPE_RUN / 2;
@@ -109,10 +110,17 @@ export function useGhostPreview(
               start: [ix - dirX * len, iy, iz - dirZ * len],
               end: [ix + dirX * len, iy, iz + dirZ * len],
             };
-          } else {
+          } else if (gr.type === "slope") {
             gr.connections = {
               start: [ix - dirX * len, startY, iz - dirZ * len],
               end: [ix + dirX * len, endY, iz + dirZ * len],
+            };
+          } else {
+            // station/crossing は直線と同一再計算（水平）
+            const len2 = RAIL_STRAIGHT_HALF_LENGTH;
+            gr.connections = {
+              start: [ix - dirX * len2, iy, iz - dirZ * len2],
+              end: [ix + dirX * len2, iy, iz + dirZ * len2],
             };
           }
         } else if (gr.type === "curve") {
@@ -148,6 +156,9 @@ export function useGhostPreview(
       } else if (selectedTool.value === "station") {
         if (!lastPointer.value) return;
         ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "station");
+      } else if (selectedTool.value === "crossing") {
+        if (!lastPointer.value) return;
+        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "crossing");
       }
       return;
     }

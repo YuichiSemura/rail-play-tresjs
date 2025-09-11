@@ -173,7 +173,7 @@ interface TrainCustomization {
 
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<
-  "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"
+  "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "crossing" | "rotate" | "delete"
 >("none");
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number]; rotation?: [number, number, number] }[]>([]);
@@ -233,7 +233,8 @@ const {
 } = useCameraController();
 
 // 幾何ロジック（切り出し）
-const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, poseFromRailEnd } = useRailsGeometry();
+const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd } =
+  useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -282,7 +283,7 @@ const snapToGridSize = (position: number, size: number): number => {
 
 // 進行端点の姿勢は共通型を使用
 
-const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" | "station"): Rail => {
+const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" | "station" | "crossing"): Rail => {
   // 前のレール終端姿勢（なければ原点+X）
   let pose: Pose = { point: [0, 0, 0], theta: 0 };
   if (rails.value.length > 0) {
@@ -346,6 +347,17 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
       return makeStation(pose, RAIL_STRAIGHT_FULL_LENGTH);
     }
     return makeStation(pose, RAIL_STRAIGHT_FULL_LENGTH);
+  } else if (type === "crossing") {
+    // 踏切（直線レールと同様の処理）
+    if (rails.value.length === 0) {
+      const dx = snapToGrid(x) - pose.point[0];
+      const dz = snapToGrid(z) - pose.point[2];
+      if (Math.hypot(dx, dz) > 1e-3) {
+        pose.theta = Math.atan2(dz, dx);
+      }
+      return makeCrossing(pose, RAIL_STRAIGHT_FULL_LENGTH);
+    }
+    return makeCrossing(pose, RAIL_STRAIGHT_FULL_LENGTH);
   }
 
   // 何も該当しない場合のデフォルト（型安全性のため）
@@ -435,10 +447,13 @@ const onPlaneClick = (event: ClickEvent) => {
   if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
     // 周回状態では新しい線路を配置できない
     if (isRailsLocked.value) {
-      showNotification("周回線路が完成しています。新しい線路を配置するには「すべてクリア」を実行してください。", "warning");
+      showNotification(
+        "周回線路が完成しています。新しい線路を配置するには「すべてクリア」を実行してください。",
+        "warning"
+      );
       return;
     }
-    
+
     let newRail = createRail(point.x, point.z, selectedTool.value);
     // 最初の一本は向き調整（R/Eの事前回転）を尊重
     if (rails.value.length === 0) {
@@ -502,6 +517,25 @@ const onPlaneClick = (event: ClickEvent) => {
     addTreeAt(point.x, point.z);
     return;
   }
+  if (selectedTool.value === "crossing") {
+    // 周回状態では新しい踏切を配置できない（駅と同様の扱いにする）
+    if (isRailsLocked.value) {
+      showNotification(
+        "周回線路が完成しています。新しい踏切を配置するには「すべてクリア」を実行してください。",
+        "warning"
+      );
+      return;
+    }
+    const newRail = createRail(point.x, point.z, "crossing");
+    const isDuplicate = rails.value.some(
+      (r) => Math.hypot(r.position[0] - newRail.position[0], r.position[2] - newRail.position[2]) < 0.1
+    );
+    if (!isDuplicate) {
+      rails.value.push(newRail);
+      isLoopComplete();
+    }
+    return;
+  }
   if (selectedTool.value === "building") {
     addBuildingAt(point.x, point.z);
     return;
@@ -513,10 +547,13 @@ const onPlaneClick = (event: ClickEvent) => {
   if (selectedTool.value === "station") {
     // 周回状態では新しい駅ホームを配置できない
     if (isRailsLocked.value) {
-      showNotification("周回線路が完成しています。新しい駅ホームを配置するには「すべてクリア」を実行してください。", "warning");
+      showNotification(
+        "周回線路が完成しています。新しい駅ホームを配置するには「すべてクリア」を実行してください。",
+        "warning"
+      );
       return;
     }
-    
+
     addStationAt(point.x, point.z);
     return;
   }
@@ -716,7 +753,6 @@ const executeConfirmAction = () => {
   confirmAction.value = null;
 };
 
-
 const loadGameData = () => {
   const res = storage.load();
   if (!res.ok) {
@@ -766,7 +802,7 @@ const handleSaveManual1 = () => {
     showNotification("保存するデータがありません", "warning");
     return;
   }
-  
+
   const existingData = storage.getManualInfo1();
   let message = `現在のデータを保存1に保存しますか？<br><br>`;
   message += `<strong>保存予定のデータ:</strong><br>`;
@@ -777,7 +813,7 @@ const handleSaveManual1 = () => {
   message += `・木: ${trees.value.length}本<br>`;
   message += `・ビル: ${buildings.value.length}本<br>`;
   message += `・橋脚: ${piers.value.length}本<br>`;
-  
+
   if (existingData) {
     message += `<br><strong>既存の保存1データ（上書きされます）:</strong><br>`;
     message += `・保存日時: ${new Date(existingData.timestamp).toLocaleString()}<br>`;
@@ -786,7 +822,7 @@ const handleSaveManual1 = () => {
     }
     message += `・線路: ${existingData.railsCount}本、木: ${existingData.treesCount}本、ビル: ${existingData.buildingsCount}本、橋脚: ${existingData.piersCount}本`;
   }
-  
+
   showConfirmDialog("保存1への保存確認", message, () => {
     const res = storage.saveManual1({
       title: currentTitle.value || undefined,
@@ -807,7 +843,7 @@ const handleSaveManual2 = () => {
     showNotification("保存するデータがありません", "warning");
     return;
   }
-  
+
   const existingData = storage.getManualInfo2();
   let message = `現在のデータを保存2に保存しますか？<br><br>`;
   message += `<strong>保存予定のデータ:</strong><br>`;
@@ -818,7 +854,7 @@ const handleSaveManual2 = () => {
   message += `・木: ${trees.value.length}本<br>`;
   message += `・ビル: ${buildings.value.length}本<br>`;
   message += `・橋脚: ${piers.value.length}本<br>`;
-  
+
   if (existingData) {
     message += `<br><strong>既存の保存2データ（上書きされます）:</strong><br>`;
     message += `・保存日時: ${new Date(existingData.timestamp).toLocaleString()}<br>`;
@@ -827,7 +863,7 @@ const handleSaveManual2 = () => {
     }
     message += `・線路: ${existingData.railsCount}本、木: ${existingData.treesCount}本、ビル: ${existingData.buildingsCount}本、橋脚: ${existingData.piersCount}本`;
   }
-  
+
   showConfirmDialog("保存2への保存確認", message, () => {
     const res = storage.saveManual2({
       title: currentTitle.value || undefined,
@@ -848,7 +884,7 @@ const handleLoadManual1 = () => {
     showNotification("保存1データが見つかりません", "warning");
     return;
   }
-  
+
   const currentItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
   let message = `保存1データを復元しますか？<br><br>`;
   message += `<strong>復元予定のデータ:</strong><br>`;
@@ -860,7 +896,7 @@ const handleLoadManual1 = () => {
   message += `・木: ${saveInfo.treesCount}本<br>`;
   message += `・ビル: ${saveInfo.buildingsCount}本<br>`;
   message += `・橋脚: ${saveInfo.piersCount}本<br>`;
-  
+
   if (currentItems > 0) {
     message += `<br><strong>現在のデータ（破棄されます）:</strong><br>`;
     if (currentTitle.value) {
@@ -871,14 +907,14 @@ const handleLoadManual1 = () => {
     message += `・ビル: ${buildings.value.length}本<br>`;
     message += `・橋脚: ${piers.value.length}本`;
   }
-  
+
   showConfirmDialog("保存1データの復元確認", message, () => {
     const res = storage.loadManual1();
     if (!res.ok) {
       showNotification(res.message, "warning");
       return;
     }
-    
+
     const saveData = res.data;
     rails.value = saveData.rails || [];
     trees.value = saveData.trees || [];
@@ -904,7 +940,7 @@ const handleLoadManual2 = () => {
     showNotification("保存2データが見つかりません", "warning");
     return;
   }
-  
+
   const currentItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
   let message = `保存2データを復元しますか？<br><br>`;
   message += `<strong>復元予定のデータ:</strong><br>`;
@@ -916,7 +952,7 @@ const handleLoadManual2 = () => {
   message += `・木: ${saveInfo.treesCount}本<br>`;
   message += `・ビル: ${saveInfo.buildingsCount}本<br>`;
   message += `・橋脚: ${saveInfo.piersCount}本<br>`;
-  
+
   if (currentItems > 0) {
     message += `<br><strong>現在のデータ（破棄されます）:</strong><br>`;
     if (currentTitle.value) {
@@ -927,14 +963,14 @@ const handleLoadManual2 = () => {
     message += `・ビル: ${buildings.value.length}本<br>`;
     message += `・橋脚: ${piers.value.length}本`;
   }
-  
+
   showConfirmDialog("保存2データの復元確認", message, () => {
     const res = storage.loadManual2();
     if (!res.ok) {
       showNotification(res.message, "warning");
       return;
     }
-    
+
     const saveData = res.data;
     rails.value = saveData.rails || [];
     trees.value = saveData.trees || [];
@@ -1225,12 +1261,12 @@ onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
   // 保存データ情報を初期化
   saveDataInfo.value = getSaveDataInfo();
-  
+
   // ページロード時に自動復元を実行
   if (storage.has()) {
     loadGameData();
   }
-  
+
   // 自動保存を開始（rails/trees/buildings/piers/gameMode/isRailsLocked を監視）
   const { stop } = storage.startAutoSave(
     () => ({

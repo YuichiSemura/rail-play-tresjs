@@ -11,7 +11,7 @@ import type { Pose, Vec3, Euler } from "../types/common";
 
 export function useRailsGeometry() {
   const segmentLength = (r: Rail) =>
-    r.type === "straight" || r.type === "slope" || r.type === "station"
+    r.type === "straight" || r.type === "slope" || r.type === "station" || r.type === "crossing"
       ? Math.hypot(r.connections.end[0] - r.connections.start[0], r.connections.end[2] - r.connections.start[2])
       : RAIL_CURVE_RADIUS * CURVE_ANGLE;
 
@@ -99,9 +99,22 @@ export function useRailsGeometry() {
     };
   };
 
+  const makeCrossing = (pose: Pose, length = RAIL_STRAIGHT_FULL_LENGTH): Rail => {
+    const start = pose.point;
+    const end: Vec3 = [start[0] + Math.cos(pose.theta) * length, start[1], start[2] + Math.sin(pose.theta) * length];
+    const mid: Vec3 = [(start[0] + end[0]) / 2, start[1], (start[2] + end[2]) / 2];
+    return {
+      id: `crossing-${Date.now()}-${Math.random()}`,
+      type: "crossing",
+      position: mid,
+      rotation: [0, -pose.theta, 0],
+      connections: { start, end },
+    };
+  };
+
   const poseFromRailEnd = (rail: Rail): Pose => {
     const end = rail.connections.end;
-    if (rail.type === "straight" || rail.type === "slope" || rail.type === "station") {
+    if (rail.type === "straight" || rail.type === "slope" || rail.type === "station" || rail.type === "crossing") {
       const theta = -rail.rotation[1];
       return { point: end, theta };
     }
@@ -110,5 +123,14 @@ export function useRailsGeometry() {
     return { point: end, theta };
   };
 
-  return { segmentLength, makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, poseFromRailEnd } as const;
+  return {
+    segmentLength,
+    makeStraight,
+    makeSlope,
+    makeLeftCurve,
+    makeRightCurve,
+    makeStation,
+    makeCrossing,
+    poseFromRailEnd,
+  } as const;
 }

@@ -19,7 +19,7 @@ export function useTrainRunner(
     position: [-(i * CAR_SPACING), HEIGHT_OFFSET, 0],
     rotation: [0, Math.PI / 2, 0],
   }));
-  
+
   const carTransforms = ref<CarPose[]>(initialPose);
   let progressDist = 0;
   let animId: number | null = null;
@@ -28,7 +28,7 @@ export function useTrainRunner(
   const totalRailLength = () => rails.value.reduce((acc, r) => acc + segmentLength(r), 0);
 
   const getPoseOnRail = (r: Rail, t: number): CarPose => {
-    if (r.type === "straight" || r.type === "slope" || r.type === "station") {
+    if (r.type === "straight" || r.type === "slope" || r.type === "station" || r.type === "crossing") {
       const sx = r.connections.start[0];
       const sy = r.connections.start[1];
       const sz = r.connections.start[2];
@@ -52,7 +52,7 @@ export function useTrainRunner(
     const cx = r.position[0];
     const cz = r.position[2];
     const theta = r.rotation[1];
-    const sgn = (r.type === "curve" && r.direction === "right") ? -1 : 1;
+    const sgn = r.type === "curve" && r.direction === "right" ? -1 : 1;
     const phi = theta - sgn * (Math.PI / 2) + sgn * CURVE_ANGLE * t;
     const x = cx + Math.cos(phi) * RAIL_CURVE_RADIUS;
     const z = cz + Math.sin(phi) * RAIL_CURVE_RADIUS;
@@ -64,9 +64,13 @@ export function useTrainRunner(
   };
 
   // Emit for train pose updates (for camera following)
-  const trainPoseCallbacks: Array<(pose: { position: [number, number, number]; rotation: [number, number, number] }) => void> = [];
-  
-  const onTrainPose = (callback: (pose: { position: [number, number, number]; rotation: [number, number, number] }) => void) => {
+  const trainPoseCallbacks: Array<
+    (pose: { position: [number, number, number]; rotation: [number, number, number] }) => void
+  > = [];
+
+  const onTrainPose = (
+    callback: (pose: { position: [number, number, number]; rotation: [number, number, number] }) => void
+  ) => {
     trainPoseCallbacks.push(callback);
     return () => {
       const index = trainPoseCallbacks.indexOf(callback);
@@ -75,7 +79,7 @@ export function useTrainRunner(
   };
 
   const emitTrainPose = (pose: { position: [number, number, number]; rotation: [number, number, number] }) => {
-    trainPoseCallbacks.forEach(callback => callback(pose));
+    trainPoseCallbacks.forEach((callback) => callback(pose));
   };
 
   // 進行を1ステップ進め、carTransforms を更新
@@ -124,9 +128,12 @@ export function useTrainRunner(
       poses.push({ position: pose.position, rotation: [smoothedPitch, pose.rotation[1], pose.rotation[2]] });
     }
     carTransforms.value = poses;
-    
+
     // Emit train pose for camera following
-    emitTrainPose({ position: lead.position, rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]] });
+    emitTrainPose({
+      position: lead.position,
+      rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]],
+    });
   };
 
   const angleLerp = (current: number, target: number, t: number) => {
