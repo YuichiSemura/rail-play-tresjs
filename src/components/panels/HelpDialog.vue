@@ -46,9 +46,12 @@
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <ul>
-                <li><strong>Shift + クリック:</strong> レールを90度回転させてから配置</li>
-                <li><strong>Ctrl + クリック:</strong> レールを180度回転させてから配置</li>
-                <li><strong>Shift + Ctrl + クリック:</strong> レールを270度回転させてから配置</li>
+                <li><strong>R:</strong> 配置方向を45°（時計回り）回転</li>
+                <li><strong>Shift + R:</strong> 配置方向を90°（反時計回り）回転</li>
+                <li><strong>E:</strong> 配置方向を45°（反時計回り）回転</li>
+                <li><strong>Shift + E:</strong> 配置方向を90°（時計回り）回転</li>
+                <li><strong>Q:</strong> 配置方向をリセット（初期向きに戻す）</li>
+                <li class="text-medium-emphasis">※ ビルドモード中のみ有効です</li>
               </ul>
             </v-expansion-panel-text>
           </v-expansion-panel>

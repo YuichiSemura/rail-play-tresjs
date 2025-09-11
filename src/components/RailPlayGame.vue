@@ -93,6 +93,9 @@
           @tree-click="onTreeClick"
           @building-click="onBuildingClick"
           @pier-click="onPierClick"
+          @front-look-start="onFrontLookStart"
+          @front-look-move="onFrontLookMove"
+          @front-look-end="onFrontLookEnd"
         />
       </v-col>
     </v-row>
@@ -187,7 +190,7 @@ const helpDialog = ref(false);
 const isRailsLocked = ref(false);
 
 // カメラ制御（composable）
-const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrbit, handleTrainPose } =
+const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrbit, handleTrainPose, startFrontLook, updateFrontLook, endFrontLook } =
   useCameraController();
 
 // 幾何ロジック（切り出し）
@@ -570,6 +573,17 @@ const createLargeCircle = () => {
   }
   isRailsLocked.value = true;
   gameMode.value = "run";
+};
+
+// 先頭カメラ視点 微調整ドラッグ
+const onFrontLookStart = () => {
+  if (cameraMode.value === "front") startFrontLook();
+};
+const onFrontLookMove = (dx: number, dy: number) => {
+  if (cameraMode.value === "front") updateFrontLook(dx, dy);
+};
+const onFrontLookEnd = () => {
+  if (cameraMode.value === "front") endFrontLook();
 };
 
 const clearAllRails = () => {

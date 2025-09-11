@@ -1,7 +1,15 @@
 <template>
-  <TresCanvas style="height: 100%" @click="onCanvasClick">
+  <TresCanvas
+    style="height: 100%"
+    @click="onCanvasClick"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMoveScene"
+    @pointerup="onPointerUp"
+    @pointerleave="onPointerUp"
+  >
     <!-- Main Camera (orbit / front 共用) -->
     <TresPerspectiveCamera
+      ref="cameraRef"
       :position="cameraPosition"
       :rotation="cameraRotation"
       :fov="cameraMode === 'orbit' ? 50 : 70"
@@ -139,6 +147,7 @@
 
 <script setup lang="ts">
 import { TresCanvas } from "@tresjs/core";
+import { shallowRef, onMounted } from "vue";
 import { OrbitControls } from "@tresjs/cientos";
 import RailPlayRail from "../RailPlayRail.vue";
 import RailPlayTrain from "../RailPlayTrain.vue";
@@ -185,7 +194,8 @@ interface Props {
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+const cameraRef = shallowRef<any>(null);
 
 // Emits
 const emit = defineEmits<{
@@ -196,6 +206,9 @@ const emit = defineEmits<{
   treeClick: [index: number];
   buildingClick: [index: number];
   pierClick: [index: number];
+  frontLookStart: [];
+  frontLookMove: [dx: number, dy: number];
+  frontLookEnd: [];
 }>();
 
 // Event handlers
@@ -218,6 +231,41 @@ const onRailClick = (rail: Rail) => {
 const onTreeClick = (index: number) => {
   emit("treeClick", index);
 };
+
+// Front camera look drag
+let dragging = false;
+let lastX = 0;
+let lastY = 0;
+const onPointerDown = (e: PointerEvent) => {
+  // OrbitControls が無効なとき（= front）だけドラッグで視点操作
+  if ((props as any).cameraMode !== "front") return;
+  dragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  emit("frontLookStart");
+};
+const onPointerMoveScene = (e: PointerEvent) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  emit("frontLookMove", dx, dy);
+};
+const onPointerUp = () => {
+  if (!dragging) return;
+  dragging = false;
+  emit("frontLookEnd");
+};
+
+onMounted(() => {
+  // three.js の Euler 回転順を YXZ に設定（前後のピッチが進行方向に対して自然になる）
+  // Tres のカメラは内部 three の Camera を保持している
+  const cam = cameraRef.value?.instance || cameraRef.value;
+  if (cam && cam.rotation) {
+    cam.rotation.order = "YXZ";
+  }
+});
 
 const onBuildingClick = (index: number) => {
   emit("buildingClick", index);
