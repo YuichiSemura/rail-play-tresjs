@@ -70,7 +70,7 @@
         </v-card>
       </v-col>
 
-      <v-col :cols="sidebarOpen ? 9 : 12" class="position-relative" style="height: 100%">
+      <v-col :cols="sidebarOpen ? 9 : 12" class="position-relative scene-column" style="height: 100%">
         <RailPlayScene
           :camera-position="cameraPosition"
           :camera-rotation="cameraRotation"
@@ -151,9 +151,9 @@ interface TrainCustomization {
 }
 
 const gameMode = ref<GameMode>("build");
-const selectedTool = ref<"straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete">(
-  "straight"
-);
+const selectedTool = ref<
+  "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"
+>("straight");
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number]; rotation?: [number, number, number] }[]>([]);
 const buildings = ref<
@@ -190,8 +190,17 @@ const helpDialog = ref(false);
 const isRailsLocked = ref(false);
 
 // カメラ制御（composable）
-const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrbit, handleTrainPose, startFrontLook, updateFrontLook, endFrontLook } =
-  useCameraController();
+const {
+  cameraMode,
+  cameraPosition,
+  cameraRotation,
+  toggleCameraMode,
+  resetToOrbit,
+  handleTrainPose,
+  startFrontLook,
+  updateFrontLook,
+  endFrontLook,
+} = useCameraController();
 
 // 幾何ロジック（切り出し）
 const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, poseFromRailEnd } = useRailsGeometry();
@@ -308,7 +317,7 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
     }
     return makeStation(pose, RAIL_STRAIGHT_FULL_LENGTH);
   }
-  
+
   // 何も該当しない場合のデフォルト（型安全性のため）
   throw new Error(`Unknown rail type: ${type}`);
 };
@@ -368,12 +377,12 @@ const addPierAt = (x: number, z: number) => {
 const addStationAt = (x: number, z: number) => {
   // 駅ホームをレールとして追加
   const newRail = createRail(x, z, "station");
-  
+
   // 位置の重複チェック（既存のレールと重複していないか確認）
-  const isDuplicate = rails.value.some((r) => 
-    Math.hypot(r.position[0] - newRail.position[0], r.position[2] - newRail.position[2]) < 0.1
+  const isDuplicate = rails.value.some(
+    (r) => Math.hypot(r.position[0] - newRail.position[0], r.position[2] - newRail.position[2]) < 0.1
   );
-  
+
   if (!isDuplicate) {
     rails.value.push(newRail);
     // 周回チェック
@@ -585,7 +594,6 @@ const onPierClick = (index: number) => {
     p.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
-
 
 const toggleGameMode = () => {
   if (gameMode.value === "build" && canRunTrain.value) {
@@ -944,20 +952,28 @@ const createSlopeUpDownCurvesPreset = () => {
   add(makeSlope(pose, true));
   add(makeSlope(pose, true));
   add(makeStraight(pose));
+  add(makeStation(pose));
   add(makeStraight(pose));
   add(makeSlope(pose, false));
   add(makeSlope(pose, false));
   // カーブ x4（左）
-  for (let i = 0; i < 4; i++) add(makeLeftCurve(pose));
+  for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
+  // 駅ホーム
+  add(makeStation(pose));
+  for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
   // 上り→下り
   add(makeSlope(pose, true));
   add(makeSlope(pose, true));
   add(makeStraight(pose));
+  add(makeStation(pose));
   add(makeStraight(pose));
   add(makeSlope(pose, false));
   add(makeSlope(pose, false));
   // カーブ x4（左）
-  for (let i = 0; i < 4; i++) add(makeLeftCurve(pose));
+  for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
+  // 駅ホーム
+  add(makeStation(pose));
+  for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
 
   // ループ完成しているのでロックして運転モードへ
   isRailsLocked.value = true;
@@ -968,6 +984,13 @@ const createSlopeUpDownCurvesPreset = () => {
 watch(selectedTool, updateGhost);
 watch(gameMode, updateGhost);
 watch(() => rails.value.length, updateGhost);
+
+// 運転モード → 配置モードに切り替わったらカメラを自由視点へ戻す
+watch(gameMode, (mode, prev) => {
+  if (mode === "build" && prev === "run") {
+    resetToOrbit();
+  }
+});
 
 // キーボードショートカット（回転）
 const onKeyDown = (e: KeyboardEvent) => {
@@ -1029,5 +1052,10 @@ onUnmounted(() => {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+
+/* TresCanvas を透過（alpha）にしたため、こちらの背景が見える */
+.scene-column {
+  background: #e6f4ff; /* 薄い空色 */
 }
 </style>

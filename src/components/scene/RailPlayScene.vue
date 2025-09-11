@@ -1,6 +1,7 @@
 <template>
   <TresCanvas
     style="height: 100%"
+    :alpha="true"
     @click="onCanvasClick"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMoveScene"
@@ -16,7 +17,7 @@
     />
 
     <!-- Controls (orbit モード時のみ) -->
-    <OrbitControls v-if="cameraMode === 'orbit'" />
+    <OrbitControls v-if="cameraMode === 'orbit'" :maxPolarAngle="Math.PI / 2 - 0.002" />
 
     <!-- Lights -->
     <TresAmbientLight :intensity="0.5" />
@@ -60,33 +61,33 @@
     </TresMesh>
 
     <!-- 壁（方角表示用） -->
-    <!-- 北の壁（赤） -->
+    <!-- 北の壁（白系） -->
     <TresMesh :position="[0, 5, -25]">
       <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#FF6B6B" :side="2" />
+      <TresMeshLambertMaterial color="#F5F5F5" :side="2" />
     </TresMesh>
 
-    <!-- 南の壁（青） -->
+    <!-- 南の壁（白系） -->
     <TresMesh :position="[0, 5, 25]">
       <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#4ECDC4" :side="2" />
+      <TresMeshLambertMaterial color="#FAFAFA" :side="2" />
     </TresMesh>
 
-    <!-- 東の壁（黄） -->
+    <!-- 東の壁（白系） -->
     <TresMesh :position="[25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
       <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#FFE66D" :side="2" />
+      <TresMeshLambertMaterial color="#F7F7F7" :side="2" />
     </TresMesh>
 
-    <!-- 西の壁（緑） -->
+    <!-- 西の壁（白系） -->
     <TresMesh :position="[-25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
       <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#95E1D3" :side="2" />
+      <TresMeshLambertMaterial color="#FFFFFF" :side="2" />
     </TresMesh>
 
     <!-- Rails -->
     <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
-    
+
     <!-- Station platforms are now rendered inside RailPlayRail component -->
 
     <!-- Train -->
@@ -146,7 +147,6 @@
     />
 
     <!-- Ghost station preview is now rendered inside RailPlayRail component -->
-
   </TresCanvas>
 </template>
 
@@ -175,14 +175,19 @@ interface Props {
   cameraPosition: [number, number, number];
   cameraRotation: [number, number, number];
   cameraMode: "orbit" | "front";
-  
+
   // ゲームオブジェクト
   rails: Rail[];
   trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
-  buildings: { position: [number, number, number]; height?: number; color?: string; rotation?: [number, number, number] }[];
+  buildings: {
+    position: [number, number, number];
+    height?: number;
+    color?: string;
+    rotation?: [number, number, number];
+  }[];
   piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
   piersKey: number;
-  
+
   // 列車関連
   carTransforms: { position: [number, number, number]; rotation: [number, number, number] }[];
   trainCustomization: {
@@ -191,11 +196,16 @@ interface Props {
     windowColor: string;
     wheelColor: string;
   };
-  
+
   // ゴースト関連
   ghostRail: Rail | null;
   ghostTree: { position: [number, number, number]; rotation?: [number, number, number] } | null;
-  ghostBuilding: { position: [number, number, number]; height?: number; color?: string; rotation?: [number, number, number] } | null;
+  ghostBuilding: {
+    position: [number, number, number];
+    height?: number;
+    color?: string;
+    rotation?: [number, number, number];
+  } | null;
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
 }
 
@@ -279,5 +289,4 @@ const onBuildingClick = (index: number) => {
 const onPierClick = (index: number) => {
   emit("pierClick", index);
 };
-
 </script>
