@@ -17,7 +17,18 @@
     />
 
     <!-- Controls (orbit モード時のみ) -->
-    <OrbitControls v-if="cameraMode === 'orbit'" :maxPolarAngle="Math.PI / 2 - 0.002" />
+    <OrbitControls
+      v-if="cameraMode === 'orbit'"
+      ref="orbitControlsRef"
+      :maxPolarAngle="Math.PI / 2 - 0.005"
+      :minDistance="3"
+      :maxDistance="50"
+      :minAzimuthAngle="-Infinity"
+      :maxAzimuthAngle="Infinity"
+      :minPolarAngle="0"
+      :enablePan="true"
+      @change="restrictCameraTarget"
+    />
 
     <!-- Lights -->
     <TresAmbientLight :intensity="0.5" />
@@ -62,25 +73,25 @@
 
     <!-- 壁（方角表示用） -->
     <!-- 北の壁（白系） -->
-    <TresMesh :position="[0, 5, -25]">
+    <TresMesh :position="[0, 5, -AREA_LIMIT]">
       <TresPlaneGeometry :args="[50, 10]" />
       <TresMeshLambertMaterial color="#F5F5F5" :side="2" />
     </TresMesh>
 
     <!-- 南の壁（白系） -->
-    <TresMesh :position="[0, 5, 25]">
+    <TresMesh :position="[0, 5, AREA_LIMIT]">
       <TresPlaneGeometry :args="[50, 10]" />
       <TresMeshLambertMaterial color="#FAFAFA" :side="2" />
     </TresMesh>
 
     <!-- 東の壁（白系） -->
-    <TresMesh :position="[25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
+    <TresMesh :position="[AREA_LIMIT, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
       <TresPlaneGeometry :args="[50, 10]" />
       <TresMeshLambertMaterial color="#F7F7F7" :side="2" />
     </TresMesh>
 
     <!-- 西の壁（白系） -->
-    <TresMesh :position="[-25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
+    <TresMesh :position="[-AREA_LIMIT, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
       <TresPlaneGeometry :args="[50, 10]" />
       <TresMeshLambertMaterial color="#FFFFFF" :side="2" />
     </TresMesh>
@@ -209,6 +220,8 @@ interface Props {
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
 }
 
+const AREA_LIMIT = 25; // カメラ移動のエリア制限（X/Z方向、正負）
+
 const props = defineProps<Props>();
 const cameraRef = shallowRef<any>(null);
 
@@ -281,6 +294,17 @@ onMounted(() => {
     cam.rotation.order = "YXZ";
   }
 });
+
+const restrictCameraTarget = (controls: any) => {
+  // Y方向の移動を禁止（Y=0に固定）
+  if (controls.target.y !== 0) {
+    controls.target.y = 0;
+  }
+
+  // X/Z方向をエリア内に制限
+  controls.target.x = Math.max(-AREA_LIMIT * 0.8, Math.min(AREA_LIMIT * 0.8, controls.target.x));
+  controls.target.z = Math.max(-AREA_LIMIT * 0.8, Math.min(AREA_LIMIT * 0.8, controls.target.z));
+};
 
 const onBuildingClick = (index: number) => {
   emit("buildingClick", index);
