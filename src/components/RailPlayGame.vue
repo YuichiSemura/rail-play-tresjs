@@ -217,6 +217,10 @@ const trainCustomization = ref<TrainCustomization>({
 const helpDialog = ref(false);
 const isRailsLocked = ref(false);
 
+// クリックイベントの重複処理を防ぐためのデバウンス
+const lastClickTime = ref(0);
+const CLICK_DEBOUNCE_MS = 100;
+
 // カメラ制御（composable）
 const {
   cameraMode,
@@ -433,6 +437,13 @@ const addStationAt = (x: number, z: number) => {
 const onPlaneClick = (event: ClickEvent) => {
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
   if (selectedTool.value === "none") return; // 何も選択していない場合は配置不可
+  
+  // デバウンス処理：短時間内の重複クリックを防ぐ
+  const now = Date.now();
+  if (now - lastClickTime.value < CLICK_DEBOUNCE_MS) {
+    return;
+  }
+  lastClickTime.value = now;
 
   const intersect = event.intersections?.[0];
   const pointLike = intersect?.point ?? event.point;
@@ -508,7 +519,6 @@ const onPlaneClick = (event: ClickEvent) => {
       }
     }
     rails.value.push(newRail);
-    updateGhost();
     return;
   }
   if (selectedTool.value === "tree") {
