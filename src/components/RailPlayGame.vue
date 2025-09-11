@@ -151,7 +151,7 @@ interface TrainCustomization {
 }
 
 const gameMode = ref<GameMode>("build");
-const selectedTool = ref<"straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete">(
+const selectedTool = ref<"straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete">(
   "straight"
 );
 const rails = ref<Rail[]>([]);
@@ -194,7 +194,7 @@ const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrb
   useCameraController();
 
 // 幾何ロジック（切り出し）
-const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, poseFromRailEnd } = useRailsGeometry();
+const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, poseFromRailEnd } = useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -233,7 +233,7 @@ const {
 registerTrainPoseCallback(handleTrainPose);
 
 const snapToGrid = (position: number): number => {
-  return Math.round(position / 2) * 2;
+  return Math.round(position / 1) * 1; // 1uグリッドに変更
 };
 
 // 任意のグリッドサイズでスナップ（木/ビル用に 1u を使用）
@@ -243,7 +243,7 @@ const snapToGridSize = (position: number, size: number): number => {
 
 // 進行端点の姿勢は共通型を使用
 
-const createRail = (x: number, z: number, type: "straight" | "curve" | "slope"): Rail => {
+const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" | "station"): Rail => {
   // 前のレール終端姿勢（なければ原点+X）
   let pose: Pose = { point: [0, 0, 0], theta: 0 };
   if (rails.value.length > 0) {
@@ -276,7 +276,7 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope"):
       return cross > 0; // 左側なら正
     })();
     return leftSide ? makeLeftCurve(pose) : makeRightCurve(pose);
-  } else {
+  } else if (type === "slope") {
     // slope（水平投影長=4、上り/下りはクリック位置で決定：前方=上り、後方=下り）
     const sx = pose.point[0];
     const sz = pose.point[2];
@@ -296,7 +296,21 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope"):
     const dot = dirx * vx + dirz * vz; // 前方: dot>=0, 後方: dot<0
     const ascending = dot >= 0;
     return makeSlope(pose, ascending);
+  } else if (type === "station") {
+    // 駅ホームレール（直線レールと同様の処理）
+    if (rails.value.length === 0) {
+      const dx = snapToGrid(x) - pose.point[0];
+      const dz = snapToGrid(z) - pose.point[2];
+      if (Math.hypot(dx, dz) > 1e-3) {
+        pose.theta = Math.atan2(dz, dx);
+      }
+      return makeStation(pose, RAIL_STRAIGHT_FULL_LENGTH);
+    }
+    return makeStation(pose, RAIL_STRAIGHT_FULL_LENGTH);
   }
+  
+  // 何も該当しない場合のデフォルト（型安全性のため）
+  throw new Error(`Unknown rail type: ${type}`);
 };
 
 interface ClickEvent {
@@ -348,6 +362,22 @@ const addPierAt = (x: number, z: number) => {
   const pz = snapToGridSize(z, 1);
   if (!piers.value.some((p) => Math.hypot(p.position[0] - px, p.position[2] - pz) < 0.1)) {
     piers.value.push({ position: [px, 0, pz], height: 0.7, rotation: [0, getPlacementRotation(), 0] });
+  }
+};
+
+const addStationAt = (x: number, z: number) => {
+  // 駅ホームをレールとして追加
+  const newRail = createRail(x, z, "station");
+  
+  // 位置の重複チェック（既存のレールと重複していないか確認）
+  const isDuplicate = rails.value.some((r) => 
+    Math.hypot(r.position[0] - newRail.position[0], r.position[2] - newRail.position[2]) < 0.1
+  );
+  
+  if (!isDuplicate) {
+    rails.value.push(newRail);
+    // 周回チェック
+    isLoopComplete();
   }
 };
 
@@ -434,6 +464,10 @@ const onPlaneClick = (event: ClickEvent) => {
     addPierAt(point.x, point.z);
     return;
   }
+  if (selectedTool.value === "station") {
+    addStationAt(point.x, point.z);
+    return;
+  }
   // rotate/delete は平面では何もしない
 };
 
@@ -474,7 +508,7 @@ const rotateRail = (rail: Rail) => {
   } else {
     const r = RAIL_CURVE_RADIUS;
     const theta = iry;
-    if ((rail.direction || "left") === "left") {
+    if (rail.type === "curve" && (rail.direction || "left") === "left") {
       // Left curve: start = C - n_left(theta), end = C - n_left(theta + Δ)
       rail.connections = {
         start: [ix + Math.sin(theta) * r, iy, iz - Math.cos(theta) * r],
@@ -551,6 +585,7 @@ const onPierClick = (index: number) => {
     p.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
+
 
 const toggleGameMode = () => {
   if (gameMode.value === "build" && canRunTrain.value) {

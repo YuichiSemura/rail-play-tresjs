@@ -26,6 +26,10 @@
         <v-icon>mdi-pillar</v-icon>
         橋脚
       </v-btn>
+      <v-btn value="station">
+        <v-icon>mdi-train</v-icon>
+        駅ホーム
+      </v-btn>
       <v-btn value="rotate">
         <v-icon>mdi-rotate-3d-variant</v-icon>
         回転
@@ -116,7 +120,7 @@
       <v-col cols="12">
         <div v-if="saveDataInfo" class="text-caption text-medium-emphasis mx-2">
           保存データ: {{ new Date(saveDataInfo.timestamp).toLocaleString() }}<br />
-          線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、 ビル{{
+          線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、ビル{{
             saveDataInfo.buildingsCount
           }}本、橋脚{{ saveDataInfo.piersCount }}本
         </div>
@@ -260,7 +264,7 @@ import { computed } from "vue";
 import type { Rail } from "../../types/rail";
 
 interface Props {
-  selectedTool: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete";
+  selectedTool: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete";
   rails: Rail[];
   trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
   buildings: {
@@ -281,7 +285,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  "update:selectedTool": [value: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete"];
+  "update:selectedTool": [value: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"];
   createLargeCircle: [];
   createOvalPreset: [];
   createSCurvePreset: [];
@@ -294,7 +298,7 @@ const emit = defineEmits<{
 // v-model bridge for selectedTool
 const selectedToolProxy = computed({
   get: () => props.selectedTool,
-  set: (v: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete") =>
+  set: (v: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete") =>
     emit("update:selectedTool", v),
 });
 </script>

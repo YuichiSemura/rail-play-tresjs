@@ -86,6 +86,8 @@
 
     <!-- Rails -->
     <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
+    
+    <!-- Station platforms are now rendered inside RailPlayRail component -->
 
     <!-- Train -->
     <RailPlayTrain :cars="carTransforms" :customization="trainCustomization" />
@@ -142,6 +144,9 @@
       :rotation="ghostPier.rotation"
       :ghost="true"
     />
+
+    <!-- Ghost station preview is now rendered inside RailPlayRail component -->
+
   </TresCanvas>
 </template>
 
@@ -274,4 +279,5 @@ const onBuildingClick = (index: number) => {
 const onPierClick = (index: number) => {
   emit("pierClick", index);
 };
+
 </script>

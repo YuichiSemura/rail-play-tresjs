@@ -28,7 +28,7 @@ export function useTrainRunner(
   const totalRailLength = () => rails.value.reduce((acc, r) => acc + segmentLength(r), 0);
 
   const getPoseOnRail = (r: Rail, t: number): CarPose => {
-    if (r.type === "straight" || r.type === "slope") {
+    if (r.type === "straight" || r.type === "slope" || r.type === "station") {
       const sx = r.connections.start[0];
       const sy = r.connections.start[1];
       const sz = r.connections.start[2];
@@ -52,7 +52,7 @@ export function useTrainRunner(
     const cx = r.position[0];
     const cz = r.position[2];
     const theta = r.rotation[1];
-    const sgn = r.direction === "right" ? -1 : 1;
+    const sgn = (r.type === "curve" && r.direction === "right") ? -1 : 1;
     const phi = theta - sgn * (Math.PI / 2) + sgn * CURVE_ANGLE * t;
     const x = cx + Math.cos(phi) * RAIL_CURVE_RADIUS;
     const z = cz + Math.sin(phi) * RAIL_CURVE_RADIUS;

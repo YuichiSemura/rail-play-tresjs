@@ -10,7 +10,8 @@ export type RailBase = {
 export type StraightRail = RailBase & { type: "straight" };
 export type SlopeRail = RailBase & { type: "slope" };
 export type CurveRail = RailBase & { type: "curve"; direction: "left" | "right" };
+export type StationRail = RailBase & { type: "station" };
 
-export type Rail = StraightRail | SlopeRail | CurveRail;
+export type Rail = StraightRail | SlopeRail | CurveRail | StationRail;
 
 export type { Pose };

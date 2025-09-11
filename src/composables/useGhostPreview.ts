@@ -1,11 +1,7 @@
 import { ref, type Ref } from "vue";
 import type { Rail, Pose } from "../types/rail";
 import { useRailsGeometry } from "./useRailsGeometry";
-import {
-  CURVE_SEGMENT_ANGLE as CURVE_ANGLE,
-  RAIL_STRAIGHT_HALF_LENGTH,
-  RAIL_SLOPE_RUN,
-} from "../constants/rail";
+import { CURVE_SEGMENT_ANGLE as CURVE_ANGLE, RAIL_STRAIGHT_HALF_LENGTH, RAIL_SLOPE_RUN } from "../constants/rail";
 
 export interface GhostPreviewState {
   lastPointer: Ref<{ x: number; z: number } | null>;
@@ -29,7 +25,7 @@ export function useGhostPreview(
   rails: Ref<Rail[]>,
   selectedTool: Ref<string>,
   gameMode: Ref<string>,
-  createRail: (x: number, z: number, type: "straight" | "curve" | "slope") => Rail
+  createRail: (x: number, z: number, type: "straight" | "curve" | "slope" | "station") => Rail
 ) {
   const { makeLeftCurve, makeRightCurve } = useRailsGeometry();
 
@@ -85,13 +81,22 @@ export function useGhostPreview(
     if (gameMode.value !== "build") return;
 
     // レールのゴースト
-    if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
+    if (
+      selectedTool.value === "straight" ||
+      selectedTool.value === "curve" ||
+      selectedTool.value === "slope" ||
+      selectedTool.value === "station"
+    ) {
       if (rails.value.length === 0) {
         if (!lastPointer.value) return; // 初回は向き決めに必要
         // 初回のみ、placementYaw を反映
         const desired = clampYawStep(placementYaw.value);
-        const gr = createRail(lastPointer.value.x, lastPointer.value.z, selectedTool.value as "straight" | "curve" | "slope");
-        if (gr.type === "straight" || gr.type === "slope") {
+        const gr = createRail(
+          lastPointer.value.x,
+          lastPointer.value.z,
+          selectedTool.value as "straight" | "curve" | "slope"
+        );
+        if (gr.type === "straight" || gr.type === "slope" || gr.type === "station") {
           gr.rotation = [gr.rotation[0], desired, gr.rotation[2]];
           const [ix, iy, iz] = gr.position;
           const len = gr.type === "straight" ? RAIL_STRAIGHT_HALF_LENGTH : RAIL_SLOPE_RUN / 2;
@@ -133,6 +138,7 @@ export function useGhostPreview(
         return;
       }
       if (selectedTool.value === "straight") {
+        console.log("ghost straight");
         ghostRail.value = createRail(0, 0, "straight");
       } else if (selectedTool.value === "curve") {
         if (!lastPointer.value) return;
@@ -140,6 +146,10 @@ export function useGhostPreview(
       } else if (selectedTool.value === "slope") {
         if (!lastPointer.value) return;
         ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "slope");
+      } else if (selectedTool.value === "station") {
+        if (!lastPointer.value) return;
+        console.log("ghost station");
+        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "station");
       }
       return;
     }
@@ -166,7 +176,7 @@ export function useGhostPreview(
       };
       return;
     }
-    
+
     if (selectedTool.value === "pier") {
       if (!lastPointer.value) return;
       const px = snapToGridSize(lastPointer.value.x, 1);
@@ -199,7 +209,7 @@ export function useGhostPreview(
     ghostTree,
     ghostBuilding,
     ghostPier,
-    
+
     // Methods
     rotatePlacement,
     resetPlacementRotation,
