@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Rail } from "./RailPlayGame.vue";
+import type { Rail } from "../types/rail";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import * as THREE from "three";
 import {

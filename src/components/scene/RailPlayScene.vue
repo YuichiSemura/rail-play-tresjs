@@ -1,0 +1,229 @@
+<template>
+  <TresCanvas style="height: 100%" @click="onCanvasClick">
+    <!-- Main Camera (orbit / front 共用) -->
+    <TresPerspectiveCamera
+      :position="cameraPosition"
+      :rotation="cameraRotation"
+      :fov="cameraMode === 'orbit' ? 50 : 70"
+    />
+
+    <!-- Controls (orbit モード時のみ) -->
+    <OrbitControls v-if="cameraMode === 'orbit'" />
+
+    <!-- Lights -->
+    <TresAmbientLight :intensity="0.5" />
+    <TresDirectionalLight :position="[10, 10, 5]" :intensity="1" cast-shadow />
+
+    <!-- Floor -->
+    <TresMesh
+      :rotation="[-Math.PI / 2, 0, 0]"
+      :position="[0, -0.01, 0]"
+      @click="onPlaneClick"
+      @pointer-move="onPlanePointerMove"
+    >
+      <TresPlaneGeometry :args="[50, 50]" />
+      <TresMeshLambertMaterial color="#90EE90" :side="2" />
+    </TresMesh>
+
+    <!-- Grid helpers (just above the floor) - unified color -->
+    <!-- Minor grid: 1u step -->
+    <TresGridHelper :args="[50, 50, '#888888', '#888888']" :position="[0, -0.005, 0]" />
+    <!-- Major grid: 2u step (double overlay for stronger look) -->
+    <TresGridHelper :args="[50, 25, '#888888', '#888888']" :position="[0, -0.004, 0]" />
+    <TresGridHelper :args="[50, 25, '#888888', '#888888']" :position="[0, -0.003, 0]" />
+
+    <!-- Axis-aligned grid lines (X/Z at 0) -->
+    <!-- X-axis grid line at Z=0 -->
+    <TresMesh :position="[0, -0.002, 0]">
+      <TresBoxGeometry :args="[50, 0.001, 0.04]" />
+      <TresMeshBasicMaterial color="#888888" />
+    </TresMesh>
+    <!-- Z-axis grid line at X=0 -->
+    <TresMesh :position="[0, -0.002, 0]">
+      <TresBoxGeometry :args="[0.04, 0.001, 50]" />
+      <TresMeshBasicMaterial color="#888888" />
+    </TresMesh>
+
+    <!-- Origin: axes + small marker -->
+    <TresAxesHelper :args="[3]" :position="[0, 0, 0]" />
+    <TresMesh :position="[0, 0.05, 0]">
+      <TresSphereGeometry :args="[0.07, 16, 16]" />
+      <TresMeshStandardMaterial color="#FFD700" />
+    </TresMesh>
+
+    <!-- 壁（方角表示用） -->
+    <!-- 北の壁（赤） -->
+    <TresMesh :position="[0, 5, -25]">
+      <TresPlaneGeometry :args="[50, 10]" />
+      <TresMeshLambertMaterial color="#FF6B6B" :side="2" />
+    </TresMesh>
+
+    <!-- 南の壁（青） -->
+    <TresMesh :position="[0, 5, 25]">
+      <TresPlaneGeometry :args="[50, 10]" />
+      <TresMeshLambertMaterial color="#4ECDC4" :side="2" />
+    </TresMesh>
+
+    <!-- 東の壁（黄） -->
+    <TresMesh :position="[25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
+      <TresPlaneGeometry :args="[50, 10]" />
+      <TresMeshLambertMaterial color="#FFE66D" :side="2" />
+    </TresMesh>
+
+    <!-- 西の壁（緑） -->
+    <TresMesh :position="[-25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
+      <TresPlaneGeometry :args="[50, 10]" />
+      <TresMeshLambertMaterial color="#95E1D3" :side="2" />
+    </TresMesh>
+
+    <!-- Rails -->
+    <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
+
+    <!-- Train -->
+    <RailPlayTrain :cars="carTransforms" :customization="trainCustomization" />
+
+    <!-- Trees -->
+    <RailPlayTree
+      v-for="(t, i) in trees"
+      :key="'tree-' + i"
+      :position="t.position"
+      :rotation="t.rotation"
+      @click="onTreeClick(i)"
+    />
+
+    <!-- Buildings -->
+    <RailPlayBuilding
+      v-for="(b, i) in buildings"
+      :key="'bld-' + i"
+      :position="b.position"
+      :height="b.height"
+      :color="b.color"
+      :rotation="b.rotation"
+      @click="onBuildingClick(i)"
+    />
+
+    <!-- Piers -->
+    <RailPlayPier
+      v-for="(p, i) in piers"
+      :key="`pier-${piersKey}-${i}`"
+      :position="p.position"
+      :height="p.height"
+      :rotation="p.rotation"
+      @click="onPierClick(i)"
+    />
+
+    <!-- Ghost rail preview -->
+    <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
+
+    <!-- Ghost tree/building preview -->
+    <RailPlayTree v-if="ghostTree" :position="ghostTree.position" :rotation="ghostTree.rotation" :ghost="true" />
+    <RailPlayBuilding
+      v-if="ghostBuilding"
+      :position="ghostBuilding.position"
+      :height="ghostBuilding.height"
+      :color="ghostBuilding.color"
+      :rotation="ghostBuilding.rotation"
+      :ghost="true"
+    />
+
+    <!-- Ghost pier preview -->
+    <RailPlayPier
+      v-if="ghostPier"
+      :position="ghostPier.position"
+      :height="ghostPier.height"
+      :rotation="ghostPier.rotation"
+      :ghost="true"
+    />
+  </TresCanvas>
+</template>
+
+<script setup lang="ts">
+import { TresCanvas } from "@tresjs/core";
+import { OrbitControls } from "@tresjs/cientos";
+import RailPlayRail from "../RailPlayRail.vue";
+import RailPlayTrain from "../RailPlayTrain.vue";
+import RailPlayTree from "../RailPlayTree.vue";
+import RailPlayBuilding from "../RailPlayBuilding.vue";
+import RailPlayPier from "../RailPlayPier.vue";
+import type { Rail } from "../../types/rail";
+
+interface ClickEvent {
+  intersections?: Array<{
+    point: { x: number; y: number; z: number };
+  }>;
+  // Tres の Pointer イベントは point を直接持つ場合がある
+  point?: { x: number; y: number; z: number };
+}
+
+// Props
+interface Props {
+  // カメラ関連
+  cameraPosition: [number, number, number];
+  cameraRotation: [number, number, number];
+  cameraMode: "orbit" | "front";
+  
+  // ゲームオブジェクト
+  rails: Rail[];
+  trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
+  buildings: { position: [number, number, number]; height?: number; color?: string; rotation?: [number, number, number] }[];
+  piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
+  piersKey: number;
+  
+  // 列車関連
+  carTransforms: { position: [number, number, number]; rotation: [number, number, number] }[];
+  trainCustomization: {
+    bodyColor: string;
+    roofColor: string;
+    windowColor: string;
+    wheelColor: string;
+  };
+  
+  // ゴースト関連
+  ghostRail: Rail | null;
+  ghostTree: { position: [number, number, number]; rotation?: [number, number, number] } | null;
+  ghostBuilding: { position: [number, number, number]; height?: number; color?: string; rotation?: [number, number, number] } | null;
+  ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
+}
+
+defineProps<Props>();
+
+// Emits
+const emit = defineEmits<{
+  canvasClick: [];
+  planeClick: [event: ClickEvent];
+  planePointerMove: [event: ClickEvent];
+  railClick: [rail: Rail];
+  treeClick: [index: number];
+  buildingClick: [index: number];
+  pierClick: [index: number];
+}>();
+
+// Event handlers
+const onCanvasClick = () => {
+  emit("canvasClick");
+};
+
+const onPlaneClick = (event: ClickEvent) => {
+  emit("planeClick", event);
+};
+
+const onPlanePointerMove = (event: ClickEvent) => {
+  emit("planePointerMove", event);
+};
+
+const onRailClick = (rail: Rail) => {
+  emit("railClick", rail);
+};
+
+const onTreeClick = (index: number) => {
+  emit("treeClick", index);
+};
+
+const onBuildingClick = (index: number) => {
+  emit("buildingClick", index);
+};
+
+const onPierClick = (index: number) => {
+  emit("pierClick", index);
+};
+</script>
