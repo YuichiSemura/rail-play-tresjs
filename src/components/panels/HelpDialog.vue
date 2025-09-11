@@ -51,6 +51,7 @@
                 <li><strong>E:</strong> 配置方向を45°（反時計回り）回転</li>
                 <li><strong>Shift + E:</strong> 配置方向を90°（時計回り）回転</li>
                 <li><strong>Q:</strong> 配置方向をリセット（初期向きに戻す）</li>
+                <li><strong>ESC:</strong> 配置ツールを「なし」にしてカメラ操作に集中</li>
                 <li class="text-medium-emphasis">※ ビルドモード中のみ有効です</li>
               </ul>
             </v-expansion-panel-text>

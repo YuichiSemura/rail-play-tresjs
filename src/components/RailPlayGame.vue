@@ -33,13 +33,17 @@
           <BuildPanel
             v-if="gameMode === 'build'"
             v-model:selectedTool="selectedTool"
+            v-model:currentTitle="currentTitle"
             :rails="rails"
             :trees="trees"
             :buildings="buildings"
             :piers="piers"
             :is-rails-locked="isRailsLocked"
-            :has-save-data="hasSaveData()"
             :save-data-info="saveDataInfo"
+            :has-manual-save1="storage.hasManual1()"
+            :has-manual-save2="storage.hasManual2()"
+            :manual-save-info1="storage.getManualInfo1()"
+            :manual-save-info2="storage.getManualInfo2()"
             :last-pointer="lastPointer"
             :ghost-rail="ghostRail"
             :ghost-pier="ghostPier"
@@ -48,8 +52,10 @@
             @createSCurvePreset="createSCurvePreset"
             @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
             @clearAllRails="clearAllRails"
-            @handleSaveData="handleSaveData"
-            @handleLoadData="handleLoadData"
+            @handleSaveManual1="handleSaveManual1"
+            @handleSaveManual2="handleSaveManual2"
+            @handleLoadManual1="handleLoadManual1"
+            @handleLoadManual2="handleLoadManual2"
           />
 
           <RunPanel
@@ -110,6 +116,21 @@
         <v-btn color="white" variant="text" @click="snackbar = false"> 閉じる </v-btn>
       </template>
     </v-snackbar>
+
+    <!-- 確認ダイアログ -->
+    <v-dialog v-model="confirmDialog" max-width="500">
+      <v-card>
+        <v-card-title>{{ confirmTitle }}</v-card-title>
+        <v-card-text>
+          <div v-html="confirmMessage"></div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="secondary" @click="confirmDialog = false">キャンセル</v-btn>
+          <v-btn color="primary" @click="executeConfirmAction">実行</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -152,8 +173,8 @@ interface TrainCustomization {
 
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<
-  "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"
->("straight");
+  "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"
+>("none");
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number]; rotation?: [number, number, number] }[]>([]);
 const buildings = ref<
@@ -176,6 +197,15 @@ const storage = useStorageStore();
 const snackbar = ref(false);
 const snackbarText = ref("");
 const snackbarColor = ref("success");
+
+// 作成中の線路のタイトル
+const currentTitle = ref("");
+
+// 確認ダイアログ用の状態
+const confirmDialog = ref(false);
+const confirmTitle = ref("");
+const confirmMessage = ref("");
+const confirmAction = ref<(() => void) | null>(null);
 
 // 電車カスタマイズ設定（デフォルト値）
 const trainCustomization = ref<TrainCustomization>({
@@ -392,6 +422,7 @@ const addStationAt = (x: number, z: number) => {
 
 const onPlaneClick = (event: ClickEvent) => {
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
+  if (selectedTool.value === "none") return; // 何も選択していない場合は配置不可
 
   const intersect = event.intersections?.[0];
   const pointLike = intersect?.point ?? event.point;
@@ -402,6 +433,12 @@ const onPlaneClick = (event: ClickEvent) => {
   updatePointer(point.x, point.z);
 
   if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
+    // 周回状態では新しい線路を配置できない
+    if (isRailsLocked.value) {
+      showNotification("周回線路が完成しています。新しい線路を配置するには「すべてクリア」を実行してください。", "warning");
+      return;
+    }
+    
     let newRail = createRail(point.x, point.z, selectedTool.value);
     // 最初の一本は向き調整（R/Eの事前回転）を尊重
     if (rails.value.length === 0) {
@@ -474,6 +511,12 @@ const onPlaneClick = (event: ClickEvent) => {
     return;
   }
   if (selectedTool.value === "station") {
+    // 周回状態では新しい駅ホームを配置できない
+    if (isRailsLocked.value) {
+      showNotification("周回線路が完成しています。新しい駅ホームを配置するには「すべてクリア」を実行してください。", "warning");
+      return;
+    }
+    
     addStationAt(point.x, point.z);
     return;
   }
@@ -656,29 +699,23 @@ const showNotification = (message: string, color: "success" | "error" | "warning
   snackbar.value = true;
 };
 
-const saveGameData = () => {
-  // データが空の場合の確認
-  const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
-  if (totalItems === 0) {
-    showNotification("保存するデータがありません", "warning");
-    return false;
-  }
-  const res = storage.save({
-    rails: rails.value,
-    trees: trees.value,
-    buildings: buildings.value,
-    piers: piers.value,
-    gameMode: gameMode.value,
-    isRailsLocked: isRailsLocked.value,
-  });
-  if (res.ok) {
-    showNotification(res.message, "success");
-    saveDataInfo.value = storage.info;
-    return true;
-  }
-  showNotification(res.message, "warning");
-  return false;
+// 確認ダイアログを表示する関数
+const showConfirmDialog = (title: string, message: string, action: () => void) => {
+  confirmTitle.value = title;
+  confirmMessage.value = message;
+  confirmAction.value = action;
+  confirmDialog.value = true;
 };
+
+// 確認ダイアログでの実行ボタンを押した時の処理
+const executeConfirmAction = () => {
+  if (confirmAction.value) {
+    confirmAction.value();
+  }
+  confirmDialog.value = false;
+  confirmAction.value = null;
+};
+
 
 const loadGameData = () => {
   const res = storage.load();
@@ -712,8 +749,6 @@ const loadGameData = () => {
   return true;
 };
 
-const hasSaveData = () => storage.has();
-
 const getSaveDataInfo = () => {
   // 可能ならストアのキャッシュ済み情報を返す
   if (storage.info) return storage.info;
@@ -724,21 +759,199 @@ const getSaveDataInfo = () => {
   return null;
 };
 
-// UI用のハンドラ関数
-const handleSaveData = () => {
-  const success = saveGameData();
-  if (success) {
-    // 保存成功時に表示情報を更新
-    saveDataInfo.value = getSaveDataInfo();
+// 手動保存・復元ハンドラ
+const handleSaveManual1 = () => {
+  const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+  if (totalItems === 0) {
+    showNotification("保存するデータがありません", "warning");
+    return;
   }
+  
+  const existingData = storage.getManualInfo1();
+  let message = `現在のデータを保存1に保存しますか？<br><br>`;
+  message += `<strong>保存予定のデータ:</strong><br>`;
+  if (currentTitle.value) {
+    message += `・タイトル: "${currentTitle.value}"<br>`;
+  }
+  message += `・線路: ${rails.value.length}本<br>`;
+  message += `・木: ${trees.value.length}本<br>`;
+  message += `・ビル: ${buildings.value.length}本<br>`;
+  message += `・橋脚: ${piers.value.length}本<br>`;
+  
+  if (existingData) {
+    message += `<br><strong>既存の保存1データ（上書きされます）:</strong><br>`;
+    message += `・保存日時: ${new Date(existingData.timestamp).toLocaleString()}<br>`;
+    if (existingData.title) {
+      message += `・タイトル: "${existingData.title}"<br>`;
+    }
+    message += `・線路: ${existingData.railsCount}本、木: ${existingData.treesCount}本、ビル: ${existingData.buildingsCount}本、橋脚: ${existingData.piersCount}本`;
+  }
+  
+  showConfirmDialog("保存1への保存確認", message, () => {
+    const res = storage.saveManual1({
+      title: currentTitle.value || undefined,
+      rails: rails.value,
+      trees: trees.value,
+      buildings: buildings.value,
+      piers: piers.value,
+      gameMode: gameMode.value,
+      isRailsLocked: isRailsLocked.value,
+    });
+    showNotification(res.message, res.ok ? "success" : "warning");
+  });
 };
 
-const handleLoadData = () => {
-  const success = loadGameData();
-  if (success) {
-    // 復元成功時に表示情報を更新
-    saveDataInfo.value = getSaveDataInfo();
+const handleSaveManual2 = () => {
+  const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+  if (totalItems === 0) {
+    showNotification("保存するデータがありません", "warning");
+    return;
   }
+  
+  const existingData = storage.getManualInfo2();
+  let message = `現在のデータを保存2に保存しますか？<br><br>`;
+  message += `<strong>保存予定のデータ:</strong><br>`;
+  if (currentTitle.value) {
+    message += `・タイトル: "${currentTitle.value}"<br>`;
+  }
+  message += `・線路: ${rails.value.length}本<br>`;
+  message += `・木: ${trees.value.length}本<br>`;
+  message += `・ビル: ${buildings.value.length}本<br>`;
+  message += `・橋脚: ${piers.value.length}本<br>`;
+  
+  if (existingData) {
+    message += `<br><strong>既存の保存2データ（上書きされます）:</strong><br>`;
+    message += `・保存日時: ${new Date(existingData.timestamp).toLocaleString()}<br>`;
+    if (existingData.title) {
+      message += `・タイトル: "${existingData.title}"<br>`;
+    }
+    message += `・線路: ${existingData.railsCount}本、木: ${existingData.treesCount}本、ビル: ${existingData.buildingsCount}本、橋脚: ${existingData.piersCount}本`;
+  }
+  
+  showConfirmDialog("保存2への保存確認", message, () => {
+    const res = storage.saveManual2({
+      title: currentTitle.value || undefined,
+      rails: rails.value,
+      trees: trees.value,
+      buildings: buildings.value,
+      piers: piers.value,
+      gameMode: gameMode.value,
+      isRailsLocked: isRailsLocked.value,
+    });
+    showNotification(res.message, res.ok ? "success" : "warning");
+  });
+};
+
+const handleLoadManual1 = () => {
+  const saveInfo = storage.getManualInfo1();
+  if (!saveInfo) {
+    showNotification("保存1データが見つかりません", "warning");
+    return;
+  }
+  
+  const currentItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+  let message = `保存1データを復元しますか？<br><br>`;
+  message += `<strong>復元予定のデータ:</strong><br>`;
+  message += `・保存日時: ${new Date(saveInfo.timestamp).toLocaleString()}<br>`;
+  if (saveInfo.title) {
+    message += `・タイトル: "${saveInfo.title}"<br>`;
+  }
+  message += `・線路: ${saveInfo.railsCount}本<br>`;
+  message += `・木: ${saveInfo.treesCount}本<br>`;
+  message += `・ビル: ${saveInfo.buildingsCount}本<br>`;
+  message += `・橋脚: ${saveInfo.piersCount}本<br>`;
+  
+  if (currentItems > 0) {
+    message += `<br><strong>現在のデータ（破棄されます）:</strong><br>`;
+    if (currentTitle.value) {
+      message += `・タイトル: "${currentTitle.value}"<br>`;
+    }
+    message += `・線路: ${rails.value.length}本<br>`;
+    message += `・木: ${trees.value.length}本<br>`;
+    message += `・ビル: ${buildings.value.length}本<br>`;
+    message += `・橋脚: ${piers.value.length}本`;
+  }
+  
+  showConfirmDialog("保存1データの復元確認", message, () => {
+    const res = storage.loadManual1();
+    if (!res.ok) {
+      showNotification(res.message, "warning");
+      return;
+    }
+    
+    const saveData = res.data;
+    rails.value = saveData.rails || [];
+    trees.value = saveData.trees || [];
+    buildings.value = saveData.buildings || [];
+    piers.value = saveData.piers || [];
+    gameMode.value = saveData.gameMode || "build";
+    isRailsLocked.value = saveData.isRailsLocked || false;
+    currentTitle.value = saveData.title || "";
+
+    trainKey.value++;
+    piersKey.value++;
+    resetGhosts();
+    resetToOrbit();
+
+    const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+    showNotification(`保存1データを復元しました（${totalItems}個のオブジェクト）`, "success");
+  });
+};
+
+const handleLoadManual2 = () => {
+  const saveInfo = storage.getManualInfo2();
+  if (!saveInfo) {
+    showNotification("保存2データが見つかりません", "warning");
+    return;
+  }
+  
+  const currentItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+  let message = `保存2データを復元しますか？<br><br>`;
+  message += `<strong>復元予定のデータ:</strong><br>`;
+  message += `・保存日時: ${new Date(saveInfo.timestamp).toLocaleString()}<br>`;
+  if (saveInfo.title) {
+    message += `・タイトル: "${saveInfo.title}"<br>`;
+  }
+  message += `・線路: ${saveInfo.railsCount}本<br>`;
+  message += `・木: ${saveInfo.treesCount}本<br>`;
+  message += `・ビル: ${saveInfo.buildingsCount}本<br>`;
+  message += `・橋脚: ${saveInfo.piersCount}本<br>`;
+  
+  if (currentItems > 0) {
+    message += `<br><strong>現在のデータ（破棄されます）:</strong><br>`;
+    if (currentTitle.value) {
+      message += `・タイトル: "${currentTitle.value}"<br>`;
+    }
+    message += `・線路: ${rails.value.length}本<br>`;
+    message += `・木: ${trees.value.length}本<br>`;
+    message += `・ビル: ${buildings.value.length}本<br>`;
+    message += `・橋脚: ${piers.value.length}本`;
+  }
+  
+  showConfirmDialog("保存2データの復元確認", message, () => {
+    const res = storage.loadManual2();
+    if (!res.ok) {
+      showNotification(res.message, "warning");
+      return;
+    }
+    
+    const saveData = res.data;
+    rails.value = saveData.rails || [];
+    trees.value = saveData.trees || [];
+    buildings.value = saveData.buildings || [];
+    piers.value = saveData.piers || [];
+    gameMode.value = saveData.gameMode || "build";
+    isRailsLocked.value = saveData.isRailsLocked || false;
+    currentTitle.value = saveData.title || "";
+
+    trainKey.value++;
+    piersKey.value++;
+    resetGhosts();
+    resetToOrbit();
+
+    const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+    showNotification(`保存2データを復元しました（${totalItems}個のオブジェクト）`, "success");
+  });
 };
 
 const toggleTrain = () => {
@@ -1002,6 +1215,9 @@ const onKeyDown = (e: KeyboardEvent) => {
     rotatePlacement(shift ? 2 : -1); // E: -45°, Shift+E: +90°
   } else if (e.key === "q" || e.key === "Q") {
     resetPlacementRotation();
+  } else if (e.key === "Escape") {
+    // ESCキーで「なし」状態に切り替え
+    selectedTool.value = "none";
   }
 };
 
@@ -1009,6 +1225,12 @@ onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
   // 保存データ情報を初期化
   saveDataInfo.value = getSaveDataInfo();
+  
+  // ページロード時に自動復元を実行
+  if (storage.has()) {
+    loadGameData();
+  }
+  
   // 自動保存を開始（rails/trees/buildings/piers/gameMode/isRailsLocked を監視）
   const { stop } = storage.startAutoSave(
     () => ({

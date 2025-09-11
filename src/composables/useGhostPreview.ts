@@ -138,7 +138,6 @@ export function useGhostPreview(
         return;
       }
       if (selectedTool.value === "straight") {
-        console.log("ghost straight");
         ghostRail.value = createRail(0, 0, "straight");
       } else if (selectedTool.value === "curve") {
         if (!lastPointer.value) return;
@@ -148,7 +147,6 @@ export function useGhostPreview(
         ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "slope");
       } else if (selectedTool.value === "station") {
         if (!lastPointer.value) return;
-        console.log("ghost station");
         ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "station");
       }
       return;

@@ -2,15 +2,19 @@
   <v-card-text>
     <v-card-subtitle>操作</v-card-subtitle>
     <v-btn-toggle v-model="selectedToolProxy" color="primary" mandatory class="d-flex flex-wrap pa-2">
-      <v-btn value="straight">
+      <v-btn value="none">
+        <v-icon>mdi-cursor-default</v-icon>
+        なし
+      </v-btn>
+      <v-btn value="straight" :disabled="isRailsLocked">
         <v-icon>mdi-minus</v-icon>
         直線
       </v-btn>
-      <v-btn value="curve">
+      <v-btn value="curve" :disabled="isRailsLocked">
         <v-icon>mdi-rotate-right</v-icon>
         カーブ
       </v-btn>
-      <v-btn value="slope">
+      <v-btn value="slope" :disabled="isRailsLocked">
         <v-icon>mdi-trending-up</v-icon>
         スロープ
       </v-btn>
@@ -26,7 +30,7 @@
         <v-icon>mdi-pillar</v-icon>
         橋脚
       </v-btn>
-      <v-btn value="station">
+      <v-btn value="station" :disabled="isRailsLocked">
         <v-icon>mdi-train</v-icon>
         駅ホーム
       </v-btn>
@@ -43,6 +47,20 @@
     <div v-if="selectedTool === 'rotate'" class="mt-3">
       <v-alert type="info"> 回転したいレールをクリックしてください </v-alert>
     </div>
+
+    <v-divider class="my-4" />
+
+    <v-text-field
+      v-model="titleProxy"
+      label="作成中の線路にタイトルを設定"
+      placeholder="例: 山手線、中央線、私の線路..."
+      density="comfortable"
+      variant="outlined"
+      class="mx-2 mb-2"
+      clearable
+      hide-details
+    />
+    <div class="text-caption text-medium-emphasis mx-2 mb-2">※ タイトルは保存時に記録され、復元時に表示されます</div>
 
     <v-alert v-if="isRailsLocked" type="success" class="mt-4"> 周回線路が完成！ </v-alert>
 
@@ -97,32 +115,67 @@
 
     <v-divider class="my-4" />
 
-    <v-card-subtitle>データ保存・復元</v-card-subtitle>
+    <v-card-subtitle>自動保存状況</v-card-subtitle>
+    <v-row dense class="pa-2">
+      <v-col cols="12">
+        <div v-if="saveDataInfo" class="text-caption text-medium-emphasis mx-2">
+          最終自動保存: {{ new Date(saveDataInfo.timestamp).toLocaleString() }}<br />
+          線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、ビル{{
+            saveDataInfo.buildingsCount
+          }}本、橋脚{{ saveDataInfo.piersCount }}本
+        </div>
+        <div v-else class="text-caption text-medium-emphasis mx-2">まだ自動保存されていません</div>
+      </v-col>
+    </v-row>
+
+    <v-card-subtitle>手動保存・復元</v-card-subtitle>
     <v-row dense class="pa-2">
       <v-col cols="6">
         <v-btn
-          color="primary"
-          @click="$emit('handleSaveData')"
+          color="success"
+          @click="$emit('handleSaveManual1')"
           :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
           block
           class="mb-2"
         >
           <v-icon size="small">mdi-content-save</v-icon>
-          <span class="text-caption">保存</span>
+          <span class="text-caption">保存1</span>
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('handleLoadData')" :disabled="!hasSaveData" block class="mb-2">
+        <v-btn
+          color="success"
+          @click="$emit('handleSaveManual2')"
+          :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+          block
+          class="mb-2"
+        >
+          <v-icon size="small">mdi-content-save</v-icon>
+          <span class="text-caption">保存2</span>
+        </v-btn>
+      </v-col>
+      <v-col cols="6">
+        <v-btn color="orange" @click="$emit('handleLoadManual1')" :disabled="!hasManualSave1" block class="mb-2">
           <v-icon size="small">mdi-upload</v-icon>
-          <span class="text-caption">復元</span>
+          <span class="text-caption">復元1</span>
+        </v-btn>
+      </v-col>
+      <v-col cols="6">
+        <v-btn color="orange" @click="$emit('handleLoadManual2')" :disabled="!hasManualSave2" block class="mb-2">
+          <v-icon size="small">mdi-upload</v-icon>
+          <span class="text-caption">復元2</span>
         </v-btn>
       </v-col>
       <v-col cols="12">
-        <div v-if="saveDataInfo" class="text-caption text-medium-emphasis mx-2">
-          保存データ: {{ new Date(saveDataInfo.timestamp).toLocaleString() }}<br />
-          線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、ビル{{
-            saveDataInfo.buildingsCount
-          }}本、橋脚{{ saveDataInfo.piersCount }}本
+        <div v-if="manualSaveInfo1" class="text-caption text-medium-emphasis mx-2">
+          保存1: {{ new Date(manualSaveInfo1.timestamp).toLocaleString() }}
+          <span v-if="manualSaveInfo1.title">"{{ manualSaveInfo1.title }}"</span>
+          (線路{{ manualSaveInfo1.railsCount }}本)
+        </div>
+        <div v-if="manualSaveInfo2" class="text-caption text-medium-emphasis mx-2">
+          保存2: {{ new Date(manualSaveInfo2.timestamp).toLocaleString() }}
+          <span v-if="manualSaveInfo2.title">"{{ manualSaveInfo2.title }}"</span>
+          (線路{{ manualSaveInfo2.railsCount }}本)
         </div>
       </v-col>
     </v-row>
@@ -260,11 +313,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import type { Rail } from "../../types/rail";
 
 interface Props {
-  selectedTool: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete";
+  selectedTool:
+    | "none"
+    | "straight"
+    | "curve"
+    | "slope"
+    | "tree"
+    | "building"
+    | "pier"
+    | "station"
+    | "rotate"
+    | "delete";
+  currentTitle: string;
   rails: Rail[];
   trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
   buildings: {
@@ -275,8 +339,11 @@ interface Props {
   }[];
   piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
   isRailsLocked: boolean;
-  hasSaveData: boolean;
   saveDataInfo: any;
+  hasManualSave1: boolean;
+  hasManualSave2: boolean;
+  manualSaveInfo1: any;
+  manualSaveInfo2: any;
   lastPointer: { x: number; z: number } | null;
   ghostRail: Rail | null;
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
@@ -285,20 +352,44 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  "update:selectedTool": [value: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"];
+  "update:selectedTool": [
+    value: "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete"
+  ];
+  "update:currentTitle": [value: string];
   createLargeCircle: [];
   createOvalPreset: [];
   createSCurvePreset: [];
   createSlopeUpDownCurvesPreset: [];
   clearAllRails: [];
-  handleSaveData: [];
-  handleLoadData: [];
+  handleSaveManual1: [];
+  handleSaveManual2: [];
+  handleLoadManual1: [];
+  handleLoadManual2: [];
 }>();
 
 // v-model bridge for selectedTool
 const selectedToolProxy = computed({
   get: () => props.selectedTool,
-  set: (v: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete") =>
+  set: (v: "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "rotate" | "delete") =>
     emit("update:selectedTool", v),
 });
+
+// v-model bridge for currentTitle
+const titleProxy = computed({
+  get: () => props.currentTitle,
+  set: (v: string) => emit("update:currentTitle", v),
+});
+
+// 周回状態になった時に線路配置ツールが選択されていたら自動的に木に切り替える
+watch(
+  () => props.isRailsLocked,
+  (isLocked) => {
+    if (isLocked) {
+      const railTools = ["straight", "curve", "slope", "station"];
+      if (railTools.includes(props.selectedTool)) {
+        emit("update:selectedTool", "tree");
+      }
+    }
+  }
+);
 </script>
