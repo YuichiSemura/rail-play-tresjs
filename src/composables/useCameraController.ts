@@ -13,15 +13,14 @@ export function useCameraController() {
   const isFrontLookActive = ref(false);
 
   // Constants
-  const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.4]; // 少し後ろから車両前方を見る（yは車両高さに加算）
+  const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.45]; // ごく少し前寄りから撮る（yは車両高さに加算）
   const CAM_POS_LERP = 0.18;
   const CAM_ROT_LERP = 0.12;
   const ORBIT_INITIAL_POSITION: [number, number, number] = [15, 8, 15];
   const ORBIT_INITIAL_ROTATION: [number, number, number] = [0, 0, 0];
-  const MAX_LOOK = Math.PI / 12; // 約15°
+  const MAX_LOOK = Math.PI / 4; // 約45°
   const LOOK_SENSITIVITY_X = 0.002; // yaw 1px あたりのラジアン
   const LOOK_SENSITIVITY_Y = 0.002; // pitch 1px あたりのラジアン
-  const LOOK_RETURN_LERP = 0.0267; // 0.08 の約 1/3（戻りを3倍遅く）
 
   // Helper functions
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -87,11 +86,7 @@ export function useCameraController() {
       0,
     ];
 
-    // ドラッグ終了後は視点オフセットをゆっくりゼロへ戻す
-    if (!isFrontLookActive.value) {
-      frontLookYaw.value = lerp(frontLookYaw.value, 0, LOOK_RETURN_LERP);
-      frontLookPitch.value = lerp(frontLookPitch.value, 0, LOOK_RETURN_LERP);
-    }
+    // ドラッグ終了後の自動リセットは行わない（ユーザー操作のみで維持/変更）
   };
 
   // Watch for camera mode changes to reset to orbit position

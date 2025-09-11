@@ -1221,7 +1221,7 @@ const createSlopeUpDownCurvesPreset = () => {
   // カーブ x4（左）
   for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
   // 駅ホーム
-  add(makeStation(pose));
+  add(makeCrossing(pose));
   for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
 
   // ループ完成しているのでロックして運転モードへ

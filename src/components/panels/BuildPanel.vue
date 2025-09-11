@@ -1,52 +1,125 @@
 <template>
   <v-card-text>
     <v-card-subtitle>操作</v-card-subtitle>
-    <v-btn-toggle v-model="selectedToolProxy" color="primary" mandatory class="d-flex flex-wrap pa-2">
-      <v-btn value="none">
-        <v-icon>mdi-cursor-default</v-icon>
-        なし
-      </v-btn>
-      <v-btn value="straight" :disabled="isRailsLocked">
-        <v-icon>mdi-minus</v-icon>
-        直線
-      </v-btn>
-      <v-btn value="curve" :disabled="isRailsLocked">
-        <v-icon>mdi-rotate-right</v-icon>
-        カーブ
-      </v-btn>
-      <v-btn value="slope" :disabled="isRailsLocked">
-        <v-icon>mdi-trending-up</v-icon>
-        スロープ
-      </v-btn>
-      <v-btn value="tree">
-        <v-icon>mdi-pine-tree</v-icon>
-        木
-      </v-btn>
-      <v-btn value="building">
-        <v-icon>mdi-office-building</v-icon>
-        ビル
-      </v-btn>
-      <v-btn value="crossing" :disabled="isRailsLocked">
-        <v-icon>mdi-boom-gate</v-icon>
-        踏切
-      </v-btn>
-      <v-btn value="station" :disabled="isRailsLocked">
-        <v-icon>mdi-train</v-icon>
-        駅ホーム
-      </v-btn>
-      <v-btn value="pier">
-        <v-icon>mdi-pillar</v-icon>
-        橋脚
-      </v-btn>
-      <v-btn value="rotate">
-        <v-icon>mdi-rotate-3d-variant</v-icon>
-        回転
-      </v-btn>
-      <v-btn value="delete">
-        <v-icon>mdi-delete</v-icon>
-        削除
-      </v-btn>
-    </v-btn-toggle>
+    <!-- v-btn-toggle は内部が単行スクロールのため折り返しできず項目が欠けるケースがある。
+         v-item-group + v-item + v-btn 構成に置換し、flex-wrap で全項目を表示する。 -->
+    <v-item-group v-model="selectedToolProxy" mandatory class="d-flex flex-wrap pa-2" style="gap: 8px">
+      <v-item value="none" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+        >
+          <v-icon>mdi-cursor-default</v-icon>
+          なし
+        </v-btn>
+      </v-item>
+      <v-item value="straight" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-minus</v-icon>
+          直線
+        </v-btn>
+      </v-item>
+      <v-item value="curve" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-rotate-right</v-icon>
+          カーブ
+        </v-btn>
+      </v-item>
+      <v-item value="slope" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-trending-up</v-icon>
+          スロープ
+        </v-btn>
+      </v-item>
+      <v-item value="crossing" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-boom-gate</v-icon>
+          踏切
+        </v-btn>
+      </v-item>
+      <v-item value="station" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-train</v-icon>
+          駅ホーム
+        </v-btn>
+      </v-item>
+      <v-item value="tree" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+        >
+          <v-icon>mdi-pine-tree</v-icon>
+          木
+        </v-btn>
+      </v-item>
+      <v-item value="building" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+        >
+          <v-icon>mdi-office-building</v-icon>
+          ビル
+        </v-btn>
+      </v-item>
+      <v-item value="pier" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+        >
+          <v-icon>mdi-pillar</v-icon>
+          橋脚
+        </v-btn>
+      </v-item>
+      <v-item value="rotate" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+        >
+          <v-icon>mdi-rotate-3d-variant</v-icon>
+          回転
+        </v-btn>
+      </v-item>
+      <v-item value="delete" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+        >
+          <v-icon>mdi-delete</v-icon>
+          削除
+        </v-btn>
+      </v-item>
+    </v-item-group>
 
     <div v-if="selectedTool === 'rotate'" class="mt-3">
       <v-alert type="info"> 回転したいレールをクリックしてください </v-alert>
