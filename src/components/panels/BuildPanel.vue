@@ -1,7 +1,7 @@
 <template>
   <v-card-text>
     <v-card-subtitle>操作</v-card-subtitle>
-  <v-btn-toggle v-model="selectedToolProxy" color="primary" mandatory class="d-flex flex-wrap pa-2">
+    <v-btn-toggle v-model="selectedToolProxy" color="primary" mandatory class="d-flex flex-wrap pa-2">
       <v-btn value="straight">
         <v-icon>mdi-minus</v-icon>
         直線
@@ -42,9 +42,7 @@
 
     <v-alert v-if="isRailsLocked" type="success" class="mt-4"> 周回線路が完成！ </v-alert>
 
-    <v-alert v-else-if="rails.length > 0" type="info" class="mt-4">
-      線路: {{ rails.length }}本配置済み
-    </v-alert>
+    <v-alert v-else-if="rails.length > 0" type="info" class="mt-4"> 線路: {{ rails.length }}本配置済み </v-alert>
 
     <v-divider class="my-4" />
 
@@ -139,9 +137,7 @@
             <div class="mb-2 pa-2" style="background-color: #f5f5f5; border-radius: 4px">
               <div>
                 <strong>lastPointer:</strong>
-                <span v-if="lastPointer">
-                  [{{ lastPointer.x.toFixed(2) }}, {{ lastPointer.z.toFixed(2) }}]
-                </span>
+                <span v-if="lastPointer"> [{{ lastPointer.x.toFixed(2) }}, {{ lastPointer.z.toFixed(2) }}] </span>
                 <span v-else>なし</span>
               </div>
               <div class="mt-1">
@@ -160,15 +156,13 @@
                   <div>RotY: {{ ((ghostRail.rotation[1] * 180) / Math.PI).toFixed(1) }}°</div>
                   <div>
                     Start: [
-                    {{ ghostRail.connections.start[0].toFixed(2) }},
-                    {{ ghostRail.connections.start[1].toFixed(2) }},
+                    {{ ghostRail.connections.start[0].toFixed(2) }}, {{ ghostRail.connections.start[1].toFixed(2) }},
                     {{ ghostRail.connections.start[2].toFixed(2) }}
                     ]
                   </div>
                   <div>
                     End: [
-                    {{ ghostRail.connections.end[0].toFixed(2) }},
-                    {{ ghostRail.connections.end[1].toFixed(2) }},
+                    {{ ghostRail.connections.end[0].toFixed(2) }}, {{ ghostRail.connections.end[1].toFixed(2) }},
                     {{ ghostRail.connections.end[2].toFixed(2) }}
                     ]
                   </div>
@@ -186,8 +180,7 @@
                   </div>
                   <div>
                     Rotation: [
-                    {{ (ghostPier.rotation?.[0] ?? 0).toFixed(2) }},
-                    {{ (ghostPier.rotation?.[1] ?? 0).toFixed(2) }},
+                    {{ (ghostPier.rotation?.[0] ?? 0).toFixed(2) }}, {{ (ghostPier.rotation?.[1] ?? 0).toFixed(2) }},
                     {{ (ghostPier.rotation?.[2] ?? 0).toFixed(2) }}
                     ]
                   </div>
@@ -270,7 +263,12 @@ interface Props {
   selectedTool: "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete";
   rails: Rail[];
   trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
-  buildings: { position: [number, number, number]; height?: number; color?: string; rotation?: [number, number, number] }[];
+  buildings: {
+    position: [number, number, number];
+    height?: number;
+    color?: string;
+    rotation?: [number, number, number];
+  }[];
   piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
   isRailsLocked: boolean;
   hasSaveData: boolean;

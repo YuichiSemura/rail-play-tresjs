@@ -187,12 +187,11 @@ const helpDialog = ref(false);
 const isRailsLocked = ref(false);
 
 // カメラ制御（composable）
-const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrbit, handleTrainPose } = useCameraController();
+const { cameraMode, cameraPosition, cameraRotation, toggleCameraMode, resetToOrbit, handleTrainPose } =
+  useCameraController();
 
 // 幾何ロジック（切り出し）
 const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, poseFromRailEnd } = useRailsGeometry();
-
-
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -221,12 +220,11 @@ const canRunTrain = computed(() => {
 });
 
 // 列車走行ロジック（composable）
-const { carTransforms, onTrainPose: registerTrainPoseCallback, reset: resetTrain } = useTrainRunner(
-  rails,
-  trainSpeed,
-  trainRunning,
-  canRunTrain
-);
+const {
+  carTransforms,
+  onTrainPose: registerTrainPoseCallback,
+  reset: resetTrain,
+} = useTrainRunner(rails, trainSpeed, trainRunning, canRunTrain);
 
 // Register train pose callback for camera following
 registerTrainPoseCallback(handleTrainPose);
@@ -320,7 +318,6 @@ const {
   resetGhosts,
   getPlacementRotation,
 } = useGhostPreview(rails, selectedTool, gameMode, createRail);
-
 
 const addTreeAt = (x: number, z: number) => {
   const px = snapToGridSize(x, 1);
@@ -691,7 +688,6 @@ const toggleTrain = () => {
   trainRunning.value = !trainRunning.value;
 };
 
-
 // モード切替とカスタマイズ関数
 const getModeTitle = (mode: GameMode) => {
   switch (mode) {
@@ -922,10 +918,7 @@ const createSlopeUpDownCurvesPreset = () => {
 // ツールやモード変更、レール本数の変化でプレビューを更新
 watch(selectedTool, updateGhost);
 watch(gameMode, updateGhost);
-watch(
-  () => rails.value.length,
-  updateGhost
-);
+watch(() => rails.value.length, updateGhost);
 
 // キーボードショートカット（回転）
 const onKeyDown = (e: KeyboardEvent) => {

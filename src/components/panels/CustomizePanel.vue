@@ -6,13 +6,7 @@
       <v-label class="mb-2">車体色</v-label>
       <div class="d-flex align-center">
         <input type="color" v-model="bodyColor" class="color-picker mr-3" />
-        <v-text-field
-          v-model="bodyColor"
-          dense
-          hide-details
-          variant="outlined"
-          style="max-width: 120px"
-        />
+        <v-text-field v-model="bodyColor" dense hide-details variant="outlined" style="max-width: 120px" />
       </div>
     </div>
 
@@ -20,13 +14,7 @@
       <v-label class="mb-2">屋根色</v-label>
       <div class="d-flex align-center">
         <input type="color" v-model="roofColor" class="color-picker mr-3" />
-        <v-text-field
-          v-model="roofColor"
-          dense
-          hide-details
-          variant="outlined"
-          style="max-width: 120px"
-        />
+        <v-text-field v-model="roofColor" dense hide-details variant="outlined" style="max-width: 120px" />
       </div>
     </div>
 
@@ -34,13 +22,7 @@
       <v-label class="mb-2">窓色</v-label>
       <div class="d-flex align-center">
         <input type="color" v-model="windowColor" class="color-picker mr-3" />
-        <v-text-field
-          v-model="windowColor"
-          dense
-          hide-details
-          variant="outlined"
-          style="max-width: 120px"
-        />
+        <v-text-field v-model="windowColor" dense hide-details variant="outlined" style="max-width: 120px" />
       </div>
     </div>
 
@@ -48,13 +30,7 @@
       <v-label class="mb-2">車輪色</v-label>
       <div class="d-flex align-center">
         <input type="color" v-model="wheelColor" class="color-picker mr-3" />
-        <v-text-field
-          v-model="wheelColor"
-          dense
-          hide-details
-          variant="outlined"
-          style="max-width: 120px"
-        />
+        <v-text-field v-model="wheelColor" dense hide-details variant="outlined" style="max-width: 120px" />
       </div>
     </div>
 
@@ -107,23 +83,19 @@ const emit = defineEmits<{
 // v-model bridges for each field
 const bodyColor = computed({
   get: () => props.trainCustomization.bodyColor,
-  set: (v: string) =>
-    emit("update:trainCustomization", { ...props.trainCustomization, bodyColor: v }),
+  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, bodyColor: v }),
 });
 const roofColor = computed({
   get: () => props.trainCustomization.roofColor,
-  set: (v: string) =>
-    emit("update:trainCustomization", { ...props.trainCustomization, roofColor: v }),
+  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, roofColor: v }),
 });
 const windowColor = computed({
   get: () => props.trainCustomization.windowColor,
-  set: (v: string) =>
-    emit("update:trainCustomization", { ...props.trainCustomization, windowColor: v }),
+  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, windowColor: v }),
 });
 const wheelColor = computed({
   get: () => props.trainCustomization.wheelColor,
-  set: (v: string) =>
-    emit("update:trainCustomization", { ...props.trainCustomization, wheelColor: v }),
+  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, wheelColor: v }),
 });
 </script>
 
