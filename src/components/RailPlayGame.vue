@@ -2,22 +2,37 @@
   <v-container fluid class="pa-0" style="height: 100%">
     <v-row no-gutters style="height: 100%">
       <v-col v-if="sidebarOpen" cols="3">
-        <v-card class="h-100 pa-4 overflow-y-auto" style="max-height: calc(100dvh - var(--v-layout-top, 64px))">
-          <v-card-title class="d-flex justify-space-between align-center">
-            <span>{{ gameMode === "build" ? "レール配置モード" : "運転モード" }}</span>
-            <v-btn
-              size="small"
-              :color="gameMode === 'run' ? 'success' : 'primary'"
-              @click="toggleGameMode"
-              :disabled="gameMode === 'build' && !canRunTrain"
-            >
-              <v-icon>{{ gameMode === "build" ? "mdi-play" : "mdi-wrench" }}</v-icon>
-              {{ gameMode === "build" ? "運転" : "配置" }}
-            </v-btn>
+        <v-card class="h-100 pa-1 overflow-y-auto" style="max-height: calc(100dvh - var(--v-layout-top, 64px))">
+          <v-card-title class="align-center">
+            <div class="mb-2">
+              <v-btn
+                v-if="gameMode !== 'customize'"
+                size="small"
+                class="mr-2"
+                :color="gameMode === 'run' ? 'success' : 'primary'"
+                @click="toggleGameMode"
+                :disabled="gameMode === 'build' && !canRunTrain"
+              >
+                <v-icon>{{ gameMode === "build" ? "mdi-play" : "mdi-wrench" }}</v-icon>
+                {{ gameMode === "build" ? "運転モード" : "配置モード" }}
+              </v-btn>
+              <v-btn size="small" color="secondary" @click="toggleCustomizeMode">
+                <v-icon>{{ gameMode === "customize" ? "mdi-arrow-left" : "mdi-palette" }}</v-icon>
+                {{ gameMode === "customize" ? "戻る" : "カスタムモード" }}
+              </v-btn>
+              <v-btn size="small" color="info" @click="helpDialog = true" class="ml-2">
+                <v-icon>mdi-help-circle</v-icon>
+                ヘルプ
+              </v-btn>
+            </div>
+
+            <v-divider class="my-4" />
+            <h3>{{ getModeTitle(gameMode) }}</h3>
           </v-card-title>
 
           <v-card-text v-if="gameMode === 'build'">
-            <v-btn-toggle v-model="selectedTool" color="primary" mandatory class="d-flex flex-wrap">
+            <v-card-subtitle>操作</v-card-subtitle>
+            <v-btn-toggle v-model="selectedTool" color="primary" mandatory class="d-flex flex-wrap pa-2">
               <v-btn value="straight">
                 <v-icon>mdi-minus</v-icon>
                 直線
@@ -52,10 +67,6 @@
               </v-btn>
             </v-btn-toggle>
 
-            <div class="text-caption text-medium-emphasis mt-2">
-              回転ショートカット: R/E = ±45°、Shift併用で反転、Q = 0°にリセット
-            </div>
-
             <div v-if="selectedTool === 'rotate'" class="mt-3">
               <v-alert type="info">
                 <v-icon>mdi-information</v-icon>
@@ -75,45 +86,85 @@
             <v-divider class="my-4" />
 
             <v-card-subtitle>プリセット線路</v-card-subtitle>
-            <v-btn color="secondary" @click="createLargeCircle" :disabled="rails.length > 0" block class="mb-2">
-              <v-icon>mdi-circle-outline</v-icon>
-              大きな円を生成
-            </v-btn>
-
-            <v-btn color="secondary" @click="createOvalPreset()" :disabled="rails.length > 0" block class="mb-2">
-              <v-icon>mdi-ellipse-outline</v-icon>
-              オーバル生成
-            </v-btn>
-
-            <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
-              <v-icon>mdi-axis-z-rotate-clockwise</v-icon>
-              S字（左→右）
-            </v-btn>
-
-            <v-btn
-              color="secondary"
-              @click="createSlopeUpDownCurvesPreset"
-              :disabled="rails.length > 0"
-              block
-              class="mb-2"
-            >
-              <v-icon>mdi-trending-up</v-icon>
-              スロープありオーバル
-            </v-btn>
-
-            <v-btn
-              color="warning"
-              @click="clearAllRails"
-              :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
-              block
-            >
-              <v-icon>mdi-delete-sweep</v-icon>
-              すべてクリア
-            </v-btn>
+            <v-row dense class="pa-2">
+              <v-col cols="6">
+                <v-btn color="secondary" @click="createLargeCircle" :disabled="rails.length > 0" block class="mb-2">
+                  <v-icon size="small">mdi-circle-outline</v-icon>
+                  <span class="text-caption">大きな円</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="6">
+                <v-btn color="secondary" @click="createOvalPreset()" :disabled="rails.length > 0" block class="mb-2">
+                  <v-icon size="small">mdi-ellipse-outline</v-icon>
+                  <span class="text-caption">オーバル</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="6">
+                <v-btn color="secondary" @click="createSCurvePreset" :disabled="rails.length > 0" block class="mb-2">
+                  <v-icon size="small">mdi-axis-z-rotate-clockwise</v-icon>
+                  <span class="text-caption">S字</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="6">
+                <v-btn
+                  color="secondary"
+                  @click="createSlopeUpDownCurvesPreset"
+                  :disabled="rails.length > 0"
+                  block
+                  class="mb-2"
+                >
+                  <v-icon size="small">mdi-trending-up</v-icon>
+                  <span class="text-caption">スロープ</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="12">
+                <v-btn
+                  color="warning"
+                  @click="clearAllRails"
+                  :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+                  block
+                >
+                  <v-icon>mdi-delete-sweep</v-icon>
+                  すべてクリア
+                </v-btn>
+              </v-col>
+            </v-row>
 
             <v-divider class="my-4" />
 
-            <v-expansion-panels>
+            <v-card-subtitle>データ保存・復元</v-card-subtitle>
+            <v-row dense class="pa-2">
+              <v-col cols="6">
+                <v-btn
+                  color="primary"
+                  @click="handleSaveData"
+                  :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+                  block
+                  class="mb-2"
+                >
+                  <v-icon size="small">mdi-content-save</v-icon>
+                  <span class="text-caption">保存</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="6">
+                <v-btn color="secondary" @click="handleLoadData" :disabled="!hasSaveData()" block class="mb-2">
+                  <v-icon size="small">mdi-upload</v-icon>
+                  <span class="text-caption">復元</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="12">
+                <div v-if="saveDataInfo" class="text-caption text-medium-emphasis mx-2">
+                  保存データ: {{ new Date(saveDataInfo.timestamp).toLocaleString() }}<br />
+                  線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、 ビル{{
+                    saveDataInfo.buildingsCount
+                  }}本、橋脚{{ saveDataInfo.piersCount }}本
+                </div>
+              </v-col>
+            </v-row>
+
+            <v-divider class="my-4" />
+
+            <v-expansion-panels class="pa-2">
               <v-expansion-panel>
                 <v-expansion-panel-title>
                   <v-icon>mdi-bug</v-icon>
@@ -246,7 +297,7 @@
             <v-divider class="my-4" />
           </v-card-text>
 
-          <v-card-text v-else>
+          <v-card-text v-else-if="gameMode === 'run'">
             <v-btn color="success" :disabled="!canRunTrain" @click="toggleTrain" block class="mb-3">
               {{ trainRunning ? "停止" : "走らせる" }}
             </v-btn>
@@ -257,6 +308,90 @@
             </v-btn>
 
             <v-slider v-model="trainSpeed" :min="0.1" :max="2.0" :step="0.1" label="速度" />
+          </v-card-text>
+
+          <v-card-text v-else-if="gameMode === 'customize'">
+            <v-card-subtitle>電車の色設定</v-card-subtitle>
+
+            <div class="mb-4">
+              <v-label class="mb-2">車体色</v-label>
+              <div class="d-flex align-center">
+                <input type="color" v-model="trainCustomization.bodyColor" class="color-picker mr-3" />
+                <v-text-field
+                  v-model="trainCustomization.bodyColor"
+                  dense
+                  hide-details
+                  variant="outlined"
+                  style="max-width: 120px"
+                />
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <v-label class="mb-2">屋根色</v-label>
+              <div class="d-flex align-center">
+                <input type="color" v-model="trainCustomization.roofColor" class="color-picker mr-3" />
+                <v-text-field
+                  v-model="trainCustomization.roofColor"
+                  dense
+                  hide-details
+                  variant="outlined"
+                  style="max-width: 120px"
+                />
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <v-label class="mb-2">窓色</v-label>
+              <div class="d-flex align-center">
+                <input type="color" v-model="trainCustomization.windowColor" class="color-picker mr-3" />
+                <v-text-field
+                  v-model="trainCustomization.windowColor"
+                  dense
+                  hide-details
+                  variant="outlined"
+                  style="max-width: 120px"
+                />
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <v-label class="mb-2">車輪色</v-label>
+              <div class="d-flex align-center">
+                <input type="color" v-model="trainCustomization.wheelColor" class="color-picker mr-3" />
+                <v-text-field
+                  v-model="trainCustomization.wheelColor"
+                  dense
+                  hide-details
+                  variant="outlined"
+                  style="max-width: 120px"
+                />
+              </div>
+            </div>
+
+            <v-divider class="my-4" />
+
+            <v-card-subtitle>プリセット</v-card-subtitle>
+            <v-row dense>
+              <v-col cols="6">
+                <v-btn color="primary" @click="applyPreset('default')" block class="mb-2">
+                  <v-icon size="small">mdi-restore</v-icon>
+                  <span class="text-caption">デフォルト</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="6">
+                <v-btn color="secondary" @click="applyPreset('red')" block class="mb-2">
+                  <v-icon size="small">mdi-palette</v-icon>
+                  <span class="text-caption">赤い電車</span>
+                </v-btn>
+              </v-col>
+              <v-col cols="6">
+                <v-btn color="success" @click="applyPreset('green')" block class="mb-2">
+                  <v-icon size="small">mdi-palette</v-icon>
+                  <span class="text-caption">緑の電車</span>
+                </v-btn>
+              </v-col>
+            </v-row>
           </v-card-text>
         </v-card>
       </v-col>
@@ -343,7 +478,7 @@
           <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
           <!-- Train -->
-          <RailPlayTrain :cars="carTransforms" />
+          <RailPlayTrain :cars="carTransforms" :customization="trainCustomization" />
 
           <!-- Trees -->
           <RailPlayTree
@@ -400,6 +535,140 @@
         </TresCanvas>
       </v-col>
     </v-row>
+
+    <!-- 遊び方説明モーダル -->
+    <v-dialog v-model="helpDialog" max-width="800px">
+      <v-card>
+        <v-card-title class="text-h5">
+          <v-icon class="mr-2">mdi-help-circle</v-icon>
+          遊び方ガイド
+        </v-card-title>
+        <v-card-text>
+          <v-expansion-panels variant="accordion">
+            <!-- 基本操作 -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-mouse</v-icon>
+                基本操作
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>視点移動:</strong> マウスドラッグで画面を回転できます</li>
+                  <li><strong>ズーム:</strong> マウスホイールで拡大・縮小できます</li>
+                  <li><strong>パン:</strong> 右クリック＋ドラッグで画面を平行移動できます</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- レール配置 -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-train-variant</v-icon>
+                レール配置
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>直線レール:</strong> クリックして配置。もう一度クリックで削除</li>
+                  <li><strong>カーブレール:</strong> 左右のカーブが選択できます</li>
+                  <li><strong>坂レール:</strong> 高低差のあるレールを作成できます</li>
+                  <li><strong>接続:</strong> レール同士は自動的に接続されます</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- キーボードショートカット -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-keyboard</v-icon>
+                キーボードショートカット
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>Shift + クリック:</strong> レールを90度回転させてから配置</li>
+                  <li><strong>Ctrl + クリック:</strong> レールを180度回転させてから配置</li>
+                  <li><strong>Shift + Ctrl + クリック:</strong> レールを270度回転させてから配置</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- 建物・装飾 -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-home-city</v-icon>
+                建物・装飾
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>建物:</strong> 街並みを作るためのビルを配置できます</li>
+                  <li><strong>木:</strong> 自然な風景を作るための樹木を配置できます</li>
+                  <li><strong>橋脚:</strong> 高架レールをサポートする支柱を配置できます</li>
+                  <li><strong>配置・削除:</strong> クリックで配置、もう一度クリックで削除</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- 電車の操作 -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-train</v-icon>
+                電車の操作
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>自動運転:</strong> 配置されたレール上を電車が自動で走行します</li>
+                  <li><strong>カスタマイズ:</strong> ホーム画面から電車の色を変更できます</li>
+                  <li><strong>連結:</strong> 3両編成の電車が表示されます</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- プリセット -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-palette</v-icon>
+                プリセット
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>基本レイアウト:</strong> 楕円形の基本的なレール配置</li>
+                  <li><strong>複雑レイアウト:</strong> カーブと直線を組み合わせた複雑な配置</li>
+                  <li><strong>坂道レイアウト:</strong> 高低差のある立体的な配置</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- データ管理 -->
+            <v-expansion-panel>
+              <v-expansion-panel-title>
+                <v-icon class="mr-2">mdi-content-save</v-icon>
+                データ管理
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <ul>
+                  <li><strong>保存:</strong> 現在のレイアウトをブラウザに保存できます</li>
+                  <li><strong>復元:</strong> 保存したレイアウトを読み込むことができます</li>
+                  <li><strong>自動保存:</strong> データはローカルストレージに自動的に保存されます</li>
+                </ul>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="primary" text @click="helpDialog = false">
+            閉じる
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- 通知用スナックバー -->
+    <v-snackbar v-model="snackbar" :color="snackbarColor" timeout="3000" location="top">
+      {{ snackbarText }}
+      <template v-slot:actions>
+        <v-btn color="white" variant="text" @click="snackbar = false"> 閉じる </v-btn>
+      </template>
+    </v-snackbar>
   </v-container>
 </template>
 
@@ -437,8 +706,16 @@ export interface Rail {
   direction?: "left" | "right";
 }
 
-type GameMode = "build" | "run";
+type GameMode = "build" | "run" | "customize";
 type CameraMode = "orbit" | "front";
+
+// 電車のカスタマイズ設定
+interface TrainCustomization {
+  bodyColor: string;
+  roofColor: string;
+  windowColor: string;
+  wheelColor: string;
+}
 
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<"straight" | "curve" | "slope" | "tree" | "building" | "pier" | "rotate" | "delete">(
@@ -455,6 +732,25 @@ const trainRunning = ref(false);
 const trainKey = ref(0);
 const piersKey = ref(0);
 const trainSpeed = ref(1.0);
+
+// 保存データ情報（リアクティブ）- 初期化は後で行う
+const saveDataInfo = ref<ReturnType<typeof getSaveDataInfo>>(null);
+
+// 通知用
+const snackbar = ref(false);
+const snackbarText = ref("");
+const snackbarColor = ref("success");
+
+// 電車カスタマイズ設定（デフォルト値）
+const trainCustomization = ref<TrainCustomization>({
+  bodyColor: "#2E86C1",
+  roofColor: "#1B4F72",
+  windowColor: "#85C1E9",
+  wheelColor: "#2C2C2C",
+});
+
+// ヘルプモーダルの状態管理
+const helpDialog = ref(false);
 const isRailsLocked = ref(false);
 const cameraMode = ref<CameraMode>("orbit");
 // カメラ姿勢（orbit モード初期位置）
@@ -1238,12 +1534,218 @@ const clearAllRails = () => {
   cameraMode.value = "orbit";
 };
 
+// ゲームデータの保存・復元機能
+interface SaveData {
+  version: string;
+  timestamp: number;
+  rails: Rail[];
+  trees: Array<{ position: [number, number, number]; rotation?: [number, number, number] }>;
+  buildings: Array<{
+    position: [number, number, number];
+    height?: number;
+    color?: string;
+    rotation?: [number, number, number];
+  }>;
+  piers: Array<{ position: [number, number, number]; height?: number; rotation?: [number, number, number] }>;
+  gameMode: GameMode;
+  isRailsLocked: boolean;
+}
+
+const SAVE_KEY = "rail-play-game-data";
+const SAVE_VERSION = "1.0.0";
+
+const showNotification = (message: string, color: "success" | "error" | "warning" = "success") => {
+  snackbarText.value = message;
+  snackbarColor.value = color;
+  snackbar.value = true;
+};
+
+const saveGameData = () => {
+  try {
+    // データが空の場合の確認
+    const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+    if (totalItems === 0) {
+      showNotification("保存するデータがありません", "warning");
+      return false;
+    }
+
+    const saveData: SaveData = {
+      version: SAVE_VERSION,
+      timestamp: Date.now(),
+      rails: rails.value,
+      trees: trees.value,
+      buildings: buildings.value,
+      piers: piers.value,
+      gameMode: gameMode.value,
+      isRailsLocked: isRailsLocked.value,
+    };
+
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+    showNotification("ゲームデータを保存しました", "success");
+    return true;
+  } catch (error) {
+    console.error("保存に失敗しました:", error);
+    showNotification("保存に失敗しました", "error");
+    return false;
+  }
+};
+
+const loadGameData = () => {
+  try {
+    const savedDataStr = localStorage.getItem(SAVE_KEY);
+    if (!savedDataStr) {
+      showNotification("保存データが見つかりません", "warning");
+      return false;
+    }
+
+    const saveData: SaveData = JSON.parse(savedDataStr);
+
+    // バージョンチェック
+    if (saveData.version !== SAVE_VERSION) {
+      showNotification("保存データのバージョンが異なりますが、復元を試みます", "warning");
+    }
+
+    // データ検証
+    if (!saveData.rails && !saveData.trees && !saveData.buildings && !saveData.piers) {
+      showNotification("保存データが破損している可能性があります", "error");
+      return false;
+    }
+
+    // データを復元
+    rails.value = saveData.rails || [];
+    trees.value = saveData.trees || [];
+    buildings.value = saveData.buildings || [];
+    piers.value = saveData.piers || [];
+    gameMode.value = saveData.gameMode || "build";
+    isRailsLocked.value = saveData.isRailsLocked || false;
+
+    // 列車と橋脚の強制再マウント
+    trainKey.value++;
+    piersKey.value++;
+
+    // ゴーストをクリア
+    ghostRail.value = null;
+    ghostTree.value = null;
+    ghostBuilding.value = null;
+    ghostPier.value = null;
+    lastPointer.value = null;
+
+    // カメラを初期位置に戻す
+    cameraMode.value = "orbit";
+    cameraPosition.value = [15, 8, 15];
+    cameraRotation.value = [0, 0, 0];
+
+    const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+    showNotification(`ゲームデータを復元しました（${totalItems}個のオブジェクト）`, "success");
+    return true;
+  } catch (error) {
+    console.error("復元に失敗しました:", error);
+    showNotification("データの復元に失敗しました", "error");
+    return false;
+  }
+};
+
+const hasSaveData = () => {
+  return localStorage.getItem(SAVE_KEY) !== null;
+};
+
+const getSaveDataInfo = () => {
+  try {
+    const savedDataStr = localStorage.getItem(SAVE_KEY);
+    if (!savedDataStr) return null;
+
+    const saveData: SaveData = JSON.parse(savedDataStr);
+    return {
+      timestamp: saveData.timestamp,
+      version: saveData.version,
+      railsCount: saveData.rails?.length || 0,
+      treesCount: saveData.trees?.length || 0,
+      buildingsCount: saveData.buildings?.length || 0,
+      piersCount: saveData.piers?.length || 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+// UI用のハンドラ関数
+const handleSaveData = () => {
+  const success = saveGameData();
+  if (success) {
+    // 保存成功時に表示情報を更新
+    saveDataInfo.value = getSaveDataInfo();
+  }
+};
+
+const handleLoadData = () => {
+  const success = loadGameData();
+  if (success) {
+    // 復元成功時に表示情報を更新
+    saveDataInfo.value = getSaveDataInfo();
+  }
+};
+
 const toggleTrain = () => {
   trainRunning.value = !trainRunning.value;
 };
 
 const toggleCameraMode = () => {
   cameraMode.value = cameraMode.value === "orbit" ? "front" : "orbit";
+};
+
+// モード切替とカスタマイズ関数
+const getModeTitle = (mode: GameMode) => {
+  switch (mode) {
+    case "build":
+      return "レール配置モード";
+    case "run":
+      return "運転モード";
+    case "customize":
+      return "電車カスタマイズモード";
+    default:
+      return "";
+  }
+};
+
+const toggleCustomizeMode = () => {
+  if (gameMode.value === "customize") {
+    gameMode.value = "build";
+  } else {
+    gameMode.value = "customize";
+  }
+};
+
+const applyPreset = (preset: "default" | "red" | "green") => {
+  switch (preset) {
+    case "default":
+      trainCustomization.value = {
+        bodyColor: "#2E86C1",
+        roofColor: "#1B4F72",
+        windowColor: "#85C1E9",
+        wheelColor: "#2C2C2C",
+      };
+      break;
+    case "red":
+      trainCustomization.value = {
+        bodyColor: "#E74C3C",
+        roofColor: "#B71C1C",
+        windowColor: "#FFCDD2",
+        wheelColor: "#424242",
+      };
+      break;
+    case "green":
+      trainCustomization.value = {
+        bodyColor: "#27AE60",
+        roofColor: "#1B5E20",
+        windowColor: "#C8E6C9",
+        wheelColor: "#2E2E2E",
+      };
+      break;
+  }
+  showNotification(
+    `${preset === "default" ? "デフォルト" : preset === "red" ? "赤い電車" : "緑の電車"}プリセットを適用しました`,
+    "success"
+  );
 };
 
 // オーバル（1直線 + 左半円 + 1直線 + 左半円 = 計10本）プリセット生成
@@ -1441,6 +1943,8 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
+  // 保存データ情報を初期化
+  saveDataInfo.value = getSaveDataInfo();
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeyDown);
@@ -1462,5 +1966,13 @@ onUnmounted(() => {
 
 .right-4 {
   right: 1rem;
+}
+
+.color-picker {
+  width: 40px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>
