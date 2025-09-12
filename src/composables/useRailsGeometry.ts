@@ -5,6 +5,8 @@ import {
   RAIL_STRAIGHT_FULL_LENGTH,
   RAIL_SLOPE_RUN,
   RAIL_SLOPE_RISE,
+  MAX_RAIL_HEIGHT,
+  MIN_PIER_HEIGHT,
 } from "../constants/rail";
 import { AREA_LIMIT } from "../constants/area";
 import type { Rail } from "../types/rail";
@@ -53,7 +55,12 @@ export function useRailsGeometry() {
     const end: Vec3 = [start[0] + dirx * RAIL_SLOPE_RUN, start[1] + rise, start[2] + dirz * RAIL_SLOPE_RUN];
     
     // 地面レベル（Y=0）より下がるかチェック
-    return start[1] >= 0 && end[1] >= 0;
+    if (start[1] < 0 || end[1] < 0) return false;
+    
+    // 最大高さ制限チェック
+    if (start[1] > MAX_RAIL_HEIGHT || end[1] > MAX_RAIL_HEIGHT) return false;
+    
+    return true;
   };
 
   const isWithinArea = (point: Vec3): boolean => {
@@ -66,7 +73,107 @@ export function useRailsGeometry() {
     const endInArea = isWithinArea(rail.connections.end);
     const positionInArea = isWithinArea(rail.position);
     
-    return startInArea && endInArea && positionInArea;
+    // 高さ制限チェック
+    const startHeightOk = rail.connections.start[1] <= MAX_RAIL_HEIGHT;
+    const endHeightOk = rail.connections.end[1] <= MAX_RAIL_HEIGHT;
+    const positionHeightOk = rail.position[1] <= MAX_RAIL_HEIGHT;
+    
+    return startInArea && endInArea && positionInArea && startHeightOk && endHeightOk && positionHeightOk;
+  };
+
+  // 線路の接続点を取得する関数
+  const getRailConnectionPoints = (rails: Rail[]): Vec3[] => {
+    const connectionPoints: Vec3[] = [];
+    rails.forEach(rail => {
+      connectionPoints.push(rail.connections.start, rail.connections.end);
+    });
+    return connectionPoints;
+  };
+
+  // 橋脚が配置可能かチェックする関数
+  const canPlacePier = (position: Vec3, rails: Rail[]): { 
+    canPlace: boolean; 
+    error?: string; 
+    rotation?: number; 
+    railHeight?: number;
+    correctPosition?: Vec3;
+  } => {
+    const [x, , z] = position;
+    
+    // 最も近い接続点を探す
+    let nearestConnection: Vec3 | null = null;
+    let minDistance = Infinity;
+    let nearestRail: Rail | null = null;
+    
+    for (const rail of rails) {
+      const checkPoints = [rail.connections.start, rail.connections.end];
+      
+      for (const point of checkPoints) {
+        const distance = Math.hypot(point[0] - x, point[2] - z);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestConnection = point;
+          nearestRail = rail;
+        }
+      }
+    }
+    
+    // 接続点に十分近いかチェック（グリッド許容範囲内）
+    if (!nearestConnection || minDistance > 0.1) {
+      return { canPlace: false, error: "橋脚は線路の接続点にのみ配置できます" };
+    }
+    
+    const railHeight = nearestConnection[1];
+    
+    // 高さが1個分以上必要
+    if (railHeight < MIN_PIER_HEIGHT) {
+      return { canPlace: false, error: `橋脚の配置には線路の高さが${MIN_PIER_HEIGHT.toFixed(1)}以上必要です` };
+    }
+    
+    // 橋脚の最大数制限（高さに応じて）
+    const maxPierCount = Math.floor(railHeight / RAIL_SLOPE_RISE);
+    if (maxPierCount > 6) {
+      return { canPlace: false, error: "橋脚は6個分の高さまでしか配置できません" };
+    }
+    
+    // 正しい橋脚の配置位置（線路の下の地面）
+    const correctPosition: Vec3 = [nearestConnection[0], 0, nearestConnection[2]];
+    
+    // レールの向きを取得（橋脚は線路に垂直）
+    let railDirection = 0;
+    if (nearestRail) {
+      // レールの種類に応じて方向を計算
+      if (nearestRail.type === 'curve') {
+        // カーブの場合、接続点での接線方向を計算
+        const isStart = Math.hypot(
+          nearestConnection[0] - nearestRail.connections.start[0],
+          nearestConnection[2] - nearestRail.connections.start[2]
+        ) < 0.1;
+        
+        if (isStart) {
+          railDirection = -nearestRail.rotation[1];
+        } else {
+          // 終点の場合は、カーブの終端での方向
+          const baseRotation = nearestRail.rotation[1];
+          const curveAngle = nearestRail.direction === 'right' ? -CURVE_ANGLE : CURVE_ANGLE;
+          railDirection = -(baseRotation + curveAngle);
+        }
+      } else {
+        // 直線レール、スロープ、駅、踏切の場合
+        railDirection = -nearestRail.rotation[1];
+      }
+      
+      // 橋脚は線路に垂直なので90度回転
+      railDirection += Math.PI / 2;
+    }
+    
+    return { 
+      canPlace: true, 
+      rotation: railDirection,
+      railHeight: railHeight,
+      correctPosition: correctPosition
+    };
   };
 
   const makeLeftCurve = (pose: Pose): Rail => {
@@ -160,5 +267,6 @@ export function useRailsGeometry() {
     canPlaceSlope,
     canPlaceRail,
     isWithinArea,
+    canPlacePier,
   } as const;
 }

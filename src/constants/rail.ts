@@ -29,6 +29,10 @@ export const RAIL_SLOPE_RISE = 0.7; // +0.7 上昇
 export const RAIL_SLOPE_PITCH = Math.atan(RAIL_SLOPE_RISE / RAIL_SLOPE_RUN); // 傾斜角 ≈ 14°
 export const RAIL_SLOPE_LENGTH_3D = Math.sqrt(RAIL_SLOPE_RUN ** 2 + RAIL_SLOPE_RISE ** 2);
 
+// 高さ制限
+export const MAX_RAIL_HEIGHT = 6 * RAIL_SLOPE_RISE; // 6個分の高さまで
+export const MIN_PIER_HEIGHT = RAIL_SLOPE_RISE; // 1個分以上の高さが必要
+
 // 便利まとめ
 export const RAIL_CURVE_RING_ARGS: [number, number, number, number, number, number] = [
   RAIL_CURVE_INNER_RADIUS,

@@ -235,7 +235,7 @@ const {
 } = useCameraController();
 
 // 幾何ロジック（切り出し）
-const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd, canPlaceSlope, canPlaceRail } =
+const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd, canPlaceSlope, canPlaceRail, canPlacePier } =
   useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
@@ -351,9 +351,9 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
     const clickDistance = Math.hypot(cameraToClickX, cameraToClickZ);
     const ascending = clickDistance > railDistance;
     
-    // 地面より下がるかチェック
+    // 地面より下がるかチェック、高さ制限チェック
     if (!canPlaceSlope(pose, ascending)) {
-      throw new Error("スロープが地面より下がるため配置できません");
+      throw new Error("スロープが地面より下がるか、高さ制限を超えるため配置できません");
     }
     
     return makeSlope(pose, ascending);
@@ -432,8 +432,31 @@ const addBuildingAt = (x: number, z: number) => {
 const addPierAt = (x: number, z: number) => {
   const px = snapToGridSize(x, 1);
   const pz = snapToGridSize(z, 1);
-  if (!piers.value.some((p) => Math.hypot(p.position[0] - px, p.position[2] - pz) < 0.1)) {
-    piers.value.push({ position: [px, 0, pz], height: 0.7, rotation: [0, getPlacementRotation(), 0] });
+  
+  // 配置可能かチェック（仮の位置で）
+  const tempPosition: [number, number, number] = [px, 0, pz];
+  const placementResult = canPlacePier(tempPosition, rails.value);
+  
+  if (!placementResult.canPlace) {
+    showNotification(placementResult.error || "橋脚を配置できません", "warning");
+    return;
+  }
+  
+  // 正しい位置と設定を取得
+  const correctPosition = placementResult.correctPosition || [px, 0, pz];
+  const railHeight = placementResult.railHeight || 0;
+  const pierRotation = placementResult.rotation || 0;
+  
+  // 重複チェック
+  if (!piers.value.some((p) => Math.hypot(p.position[0] - correctPosition[0], p.position[2] - correctPosition[2]) < 0.1)) {
+    // 橋脚の高さは線路の高さに合わせる（線路を支えるため）
+    const pierHeight = Math.max(0.7, railHeight);
+    
+    piers.value.push({ 
+      position: correctPosition as [number, number, number],
+      height: pierHeight, 
+      rotation: [0, pierRotation, 0] 
+    });
   }
 };
 
