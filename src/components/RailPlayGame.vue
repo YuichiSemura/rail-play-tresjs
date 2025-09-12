@@ -235,7 +235,7 @@ const {
 } = useCameraController();
 
 // 幾何ロジック（切り出し）
-const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd } =
+const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd, canPlaceSlope, canPlaceRail } =
   useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
@@ -319,11 +319,12 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
     })();
     return leftSide ? makeLeftCurve(pose) : makeRightCurve(pose);
   } else if (type === "slope") {
-    // slope（水平投影長=4、上り/下りはクリック位置で決定：前方=上り、後方=下り）
+    // slope（カメラ視点からの相対位置で上り/下りを決定）
     const sx = pose.point[0];
     const sz = pose.point[2];
     const tx = snapToGrid(x);
     const tz = snapToGrid(z);
+    
     if (rails.value.length === 0) {
       const dx0 = tx - sx;
       const dz0 = tz - sz;
@@ -331,12 +332,30 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
         pose.theta = Math.atan2(dz0, dx0);
       }
     }
-    const dirx = Math.cos(pose.theta);
-    const dirz = Math.sin(pose.theta);
-    const vx = tx - sx;
-    const vz = tz - sz;
-    const dot = dirx * vx + dirz * vz; // 前方: dot>=0, 後方: dot<0
-    const ascending = dot >= 0;
+    
+    // カメラ位置から見た判定
+    const cameraX = cameraPosition.value[0];
+    const cameraZ = cameraPosition.value[2];
+    
+    // カメラからレール開始点へのベクトル
+    const cameraToRailX = sx - cameraX;
+    const cameraToRailZ = sz - cameraZ;
+    
+    // カメラからクリック位置へのベクトル
+    const cameraToClickX = tx - cameraX;
+    const cameraToClickZ = tz - cameraZ;
+    
+    // カメラからの距離を比較
+    // クリック位置がレール開始点より遠い場合は上り、近い場合は下り
+    const railDistance = Math.hypot(cameraToRailX, cameraToRailZ);
+    const clickDistance = Math.hypot(cameraToClickX, cameraToClickZ);
+    const ascending = clickDistance > railDistance;
+    
+    // 地面より下がるかチェック
+    if (!canPlaceSlope(pose, ascending)) {
+      throw new Error("スロープが地面より下がるため配置できません");
+    }
+    
     return makeSlope(pose, ascending);
   } else if (type === "station") {
     // 駅ホームレール（直線レールと同様の処理）
@@ -463,7 +482,24 @@ const onPlaneClick = (event: ClickEvent) => {
       return;
     }
 
-    let newRail = createRail(point.x, point.z, selectedTool.value);
+    let newRail: Rail;
+    try {
+      newRail = createRail(point.x, point.z, selectedTool.value);
+    } catch (error) {
+      if (error instanceof Error) {
+        showNotification(error.message, "warning");
+      } else {
+        showNotification("レールを配置できませんでした", "warning");
+      }
+      return;
+    }
+    
+    // エリア内チェック
+    if (!canPlaceRail(newRail)) {
+      showNotification("レールがエリア外に出るため配置できません", "warning");
+      return;
+    }
+    
     // 最初の一本は向き調整（R/Eの事前回転）を尊重
     if (rails.value.length === 0) {
       if (newRail.type === "straight" || newRail.type === "slope") {

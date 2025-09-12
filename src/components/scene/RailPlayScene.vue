@@ -219,7 +219,7 @@ interface Props {
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
 }
 
-const AREA_LIMIT = 25; // カメラ移動のエリア制限（X/Z方向、正負）
+import { AREA_LIMIT } from "../../constants/area";
 
 const props = defineProps<Props>();
 const cameraRef = shallowRef<any>(null);

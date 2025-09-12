@@ -6,6 +6,7 @@ import {
   RAIL_SLOPE_RUN,
   RAIL_SLOPE_RISE,
 } from "../constants/rail";
+import { AREA_LIMIT } from "../constants/area";
 import type { Rail } from "../types/rail";
 import type { Pose, Vec3, Euler } from "../types/common";
 
@@ -42,6 +43,30 @@ export function useRailsGeometry() {
       rotation: [0, -pose.theta, 0],
       connections: { start, end },
     };
+  };
+
+  const canPlaceSlope = (pose: Pose, ascending = true): boolean => {
+    const start = pose.point;
+    const dirx = Math.cos(pose.theta);
+    const dirz = Math.sin(pose.theta);
+    const rise = ascending ? RAIL_SLOPE_RISE : -RAIL_SLOPE_RISE;
+    const end: Vec3 = [start[0] + dirx * RAIL_SLOPE_RUN, start[1] + rise, start[2] + dirz * RAIL_SLOPE_RUN];
+    
+    // 地面レベル（Y=0）より下がるかチェック
+    return start[1] >= 0 && end[1] >= 0;
+  };
+
+  const isWithinArea = (point: Vec3): boolean => {
+    return Math.abs(point[0]) <= AREA_LIMIT && Math.abs(point[2]) <= AREA_LIMIT;
+  };
+
+  const canPlaceRail = (rail: Rail): boolean => {
+    // エリア内チェック
+    const startInArea = isWithinArea(rail.connections.start);
+    const endInArea = isWithinArea(rail.connections.end);
+    const positionInArea = isWithinArea(rail.position);
+    
+    return startInArea && endInArea && positionInArea;
   };
 
   const makeLeftCurve = (pose: Pose): Rail => {
@@ -132,5 +157,8 @@ export function useRailsGeometry() {
     makeStation,
     makeCrossing,
     poseFromRailEnd,
+    canPlaceSlope,
+    canPlaceRail,
+    isWithinArea,
   } as const;
 }
