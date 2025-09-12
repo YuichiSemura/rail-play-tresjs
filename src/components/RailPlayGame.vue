@@ -437,7 +437,7 @@ const addStationAt = (x: number, z: number) => {
 const onPlaneClick = (event: ClickEvent) => {
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
   if (selectedTool.value === "none") return; // 何も選択していない場合は配置不可
-  
+
   // デバウンス処理：短時間内の重複クリックを防ぐ
   const now = Date.now();
   if (now - lastClickTime.value < CLICK_DEBOUNCE_MS) {
@@ -633,11 +633,16 @@ const onRailClick = (rail: Rail) => {
   if (selectedTool.value === "delete") {
     const index = rails.value.findIndex((r) => r.id === rail.id);
     if (index > -1) {
-      rails.value.splice(index, 1);
-      // 削除後にロック状態をリセット
-      if (isRailsLocked.value) {
-        isRailsLocked.value = false;
-        gameMode.value = "build"; // ビルドモードに戻す
+      // 先頭または最後のレールのみ削除可能
+      if (index === 0 || index === rails.value.length - 1) {
+        rails.value.splice(index, 1);
+        // 削除後にロック状態をリセット
+        if (isRailsLocked.value) {
+          isRailsLocked.value = false;
+          gameMode.value = "build"; // ビルドモードに戻す
+        }
+      } else {
+        showNotification("線路の削除は先頭または最後のレールのみ可能です", "warning");
       }
     }
   } else if (selectedTool.value === "rotate") {

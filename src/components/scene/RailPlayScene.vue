@@ -107,7 +107,7 @@
     <!-- Trees -->
     <SceneryTree
       v-for="(t, i) in trees"
-      :key="'tree-' + i"
+      :key="`tree-${i}-${t.position[0]}-${t.position[2]}`"
       :position="t.position"
       :rotation="t.rotation"
       @click="onTreeClick(i)"
@@ -116,7 +116,7 @@
     <!-- Buildings -->
     <SceneryBuilding
       v-for="(b, i) in buildings"
-      :key="'bld-' + i"
+      :key="`building-${i}-${b.position[0]}-${b.position[2]}-${b.color}`"
       :position="b.position"
       :height="b.height"
       :color="b.color"
@@ -127,7 +127,7 @@
     <!-- Piers -->
     <SceneryPier
       v-for="(p, i) in piers"
-      :key="'pier-' + i"
+      :key="`pier-${i}-${p.position[0]}-${p.position[2]}`"
       :position="p.position"
       :height="p.height"
       :rotation="p.rotation"

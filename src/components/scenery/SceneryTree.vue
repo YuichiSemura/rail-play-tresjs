@@ -3,7 +3,7 @@
     :position="position"
     :rotation="rotation"
     :scale="scale"
-    @pointerdown="!ghost && $emit('click')"
+    @click="!ghost && $emit('click')"
     :render-order="ghost ? 1 : 0"
   >
     <TresMesh :position="[0, trunkHeight / 2, 0]">

@@ -26,7 +26,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ click: [] }>();
-const onClick = () => emit("click");
+const onClick = () => {
+  if (!props.ghost) {
+    emit("click");
+  }
+};
 
 const PIER_COLOR = "#9E9E9E";
 const FRAME_WIDTH = 0.8;
