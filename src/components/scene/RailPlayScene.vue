@@ -97,15 +97,15 @@
     </TresMesh>
 
     <!-- Rails -->
-    <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
+    <RailSegment v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
-    <!-- Station platforms are now rendered inside RailPlayRail component -->
+    <!-- Station platforms are rendered inside RailSegment component -->
 
     <!-- Train -->
-    <RailPlayTrain :cars="carTransforms" :customization="trainCustomization" />
+    <Train :cars="carTransforms" :customization="trainCustomization" />
 
     <!-- Trees -->
-    <RailPlayTree
+    <SceneryTree
       v-for="(t, i) in trees"
       :key="'tree-' + i"
       :position="t.position"
@@ -114,7 +114,7 @@
     />
 
     <!-- Buildings -->
-    <RailPlayBuilding
+    <SceneryBuilding
       v-for="(b, i) in buildings"
       :key="'bld-' + i"
       :position="b.position"
@@ -125,7 +125,7 @@
     />
 
     <!-- Piers -->
-    <RailPlayPier
+    <SceneryPier
       v-for="(p, i) in piers"
       :key="'pier-' + i"
       :position="p.position"
@@ -135,11 +135,11 @@
     />
 
     <!-- Ghost rail preview -->
-    <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
+    <RailSegment v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
 
     <!-- Ghost tree/building preview -->
-    <RailPlayTree v-if="ghostTree" :position="ghostTree.position" :rotation="ghostTree.rotation" :ghost="true" />
-    <RailPlayBuilding
+    <SceneryTree v-if="ghostTree" :position="ghostTree.position" :rotation="ghostTree.rotation" :ghost="true" />
+    <SceneryBuilding
       v-if="ghostBuilding"
       :position="ghostBuilding.position"
       :height="ghostBuilding.height"
@@ -149,7 +149,7 @@
     />
 
     <!-- Ghost pier preview -->
-    <RailPlayPier
+    <SceneryPier
       v-if="ghostPier"
       :position="ghostPier.position"
       :height="ghostPier.height"
@@ -157,7 +157,7 @@
       :ghost="true"
     />
 
-    <!-- Ghost station preview is now rendered inside RailPlayRail component -->
+    <!-- Ghost station preview is rendered inside RailSegment component -->
   </TresCanvas>
 </template>
 
@@ -165,11 +165,11 @@
 import { TresCanvas } from "@tresjs/core";
 import { shallowRef, onMounted } from "vue";
 import { OrbitControls } from "@tresjs/cientos";
-import RailPlayRail from "../RailPlayRail.vue";
-import RailPlayTrain from "../RailPlayTrain.vue";
-import RailPlayTree from "../RailPlayTree.vue";
-import RailPlayBuilding from "../RailPlayBuilding.vue";
-import RailPlayPier from "../RailPlayPier.vue";
+import RailSegment from "../rail/RailSegment.vue";
+import Train from "../train/Train.vue";
+import SceneryTree from "../scenery/SceneryTree.vue";
+import SceneryBuilding from "../scenery/SceneryBuilding.vue";
+import SceneryPier from "../scenery/SceneryPier.vue";
 import type { Rail } from "../../types/rail";
 
 interface ClickEvent {

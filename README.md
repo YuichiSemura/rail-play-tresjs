@@ -94,11 +94,11 @@ src/
       panels/RunPanel.vue      # 走行/速度/カメラ切替
       panels/CustomizePanel.vue# 電車カラー編集
       panels/HelpDialog.vue    # 遊び方説明
-      RailPlayRail.vue
-      RailPlayTrain.vue
-      RailPlayTree.vue
-      RailPlayBuilding.vue
-      RailPlayPier.vue
+    rail/RailSegment.vue    # レール1本（直線/カーブ/スロープ/駅/踏切 統合）
+    train/Train.vue         # 電車モデル
+    scenery/SceneryTree.vue
+    scenery/SceneryBuilding.vue
+    scenery/SceneryPier.vue
       RailPlayStation.vue
       RailPlayCrossing.vue
    composables/
