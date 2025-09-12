@@ -27,8 +27,14 @@ export function useTrainRunner(
   // Helper functions
   const totalRailLength = () => rails.value.reduce((acc, r) => acc + segmentLength(r), 0);
 
+  // スロープ用のease-in-out関数（RailSegment.vueと同じ）
+  const easeInOutQuad = (t: number) => {
+    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+  };
+
   const getPoseOnRail = (r: Rail, t: number): CarPose => {
-    if (r.type === "straight" || r.type === "slope" || r.type === "station" || r.type === "crossing") {
+    if (r.type === "straight" || r.type === "station" || r.type === "crossing") {
+      // 直線レールの処理（従来通り）
       const sx = r.connections.start[0];
       const sy = r.connections.start[1];
       const sz = r.connections.start[2];
@@ -44,8 +50,42 @@ export function useTrainRunner(
       const z = sz + nz * len * t;
       const y = sy + (ey - sy) * t + HEIGHT_OFFSET;
       const yaw = Math.atan2(nx, nz);
-      // pitch: 傾斜角。three.jsの回転規約では上りでマイナス、下りでプラスになるように反転して適用
       const pitch = Math.atan2(ey - sy, len);
+      return { position: [x, y, z], rotation: [-pitch, yaw, 0] };
+    }
+    if (r.type === "slope") {
+      // スロープの処理（ease-in-outカーブ適用）
+      const sx = r.connections.start[0];
+      const sy = r.connections.start[1];
+      const sz = r.connections.start[2];
+      const ex = r.connections.end[0];
+      const ey = r.connections.end[1];
+      const ez = r.connections.end[2];
+      const dx = ex - sx;
+      const dz = ez - sz;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = dx / len;
+      const nz = dz / len;
+      
+      // X, Z座標は直線的に補間
+      const x = sx + nx * len * t;
+      const z = sz + nz * len * t;
+      
+      // Y座標はease-in-outカーブで補間
+      const totalRise = ey - sy;
+      const easedT = easeInOutQuad(t);
+      const y = sy + totalRise * easedT + HEIGHT_OFFSET;
+      
+      const yaw = Math.atan2(nx, nz);
+      
+      // ピッチ角度もease-in-outカーブの接線に合わせて計算
+      const deltaT = 0.001; // 微小変化量
+      const easedT1 = easeInOutQuad(Math.max(0, t - deltaT));
+      const easedT2 = easeInOutQuad(Math.min(1, t + deltaT));
+      const dydt = (easedT2 - easedT1) / (2 * deltaT) * totalRise;
+      const dxdt = len; // X方向の変化量は一定
+      const pitch = Math.atan2(dydt, dxdt);
+      
       return { position: [x, y, z], rotation: [-pitch, yaw, 0] };
     }
     // curve

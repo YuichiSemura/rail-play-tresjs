@@ -81,15 +81,6 @@ export function useRailsGeometry() {
     return startInArea && endInArea && positionInArea && startHeightOk && endHeightOk && positionHeightOk;
   };
 
-  // 線路の接続点を取得する関数
-  const getRailConnectionPoints = (rails: Rail[]): Vec3[] => {
-    const connectionPoints: Vec3[] = [];
-    rails.forEach(rail => {
-      connectionPoints.push(rail.connections.start, rail.connections.end);
-    });
-    return connectionPoints;
-  };
-
   // 橋脚が配置可能かチェックする関数
   const canPlacePier = (position: Vec3, rails: Rail[]): { 
     canPlace: boolean; 

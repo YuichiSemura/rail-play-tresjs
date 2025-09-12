@@ -13,14 +13,13 @@
       </TresMesh>
     </TresGroup>
 
-    <!-- Slope rail (tilted box to match logical rise) -->
-    <TresGroup v-else-if="rail.type === 'slope'" :key="`slope-${rail.id}`" :position="[0, RAIL_HEIGHT / 2, 0]">
+    <!-- Slope rail (curved slope with ease-in-out) -->
+    <TresGroup v-else-if="rail.type === 'slope'" :key="`slope-${rail.id}`">
       <TresGroup
-        :position="[rail.position[0], (rail.connections.start[1] + rail.connections.end[1]) / 2, rail.position[2]]"
+        :position="[rail.position[0], 0, rail.position[2]]"
         :rotation="[0, -rail.rotation[1], 0]"
       >
-        <TresMesh :rotation="[0, 0, Math.atan2(rail.connections.end[1] - rail.connections.start[1], RAIL_SLOPE_RUN)]">
-          <TresBoxGeometry :args="[RAIL_SLOPE_LENGTH_3D, RAIL_HEIGHT, RAIL_THICKNESS]" />
+        <TresMesh v-if="slopeGeometry" :geometry="slopeGeometry">
           <TresMeshLambertMaterial
             :color="ghost ? '#6AA0FF' : '#4169E1'"
             :transparent="ghost"
@@ -116,7 +115,6 @@ import {
   RAIL_HEIGHT,
   RAIL_THICKNESS,
   RAIL_SLOPE_RUN,
-  RAIL_SLOPE_LENGTH_3D,
 } from "../../constants/rail";
 
 const props = defineProps<{
@@ -134,6 +132,84 @@ const onClick = () => {
 };
 
 const curveGeometry = ref<THREE.ExtrudeGeometry | null>(null);
+const slopeGeometry = ref<THREE.BufferGeometry | null>(null);
+
+const buildSlopeGeometry = () => {
+  // 既存のジオメトリを破棄してから再生成
+  if (slopeGeometry.value) {
+    slopeGeometry.value.dispose();
+    slopeGeometry.value = null;
+  }
+  if (props.rail.type !== "slope") return;
+  
+  const startY = props.rail.connections.start[1];
+  const endY = props.rail.connections.end[1];
+  const totalRise = endY - startY;
+  
+  // より直線的なease-in-out関数（緩やかな曲線）
+  const easeInOutQuad = (t: number) => {
+    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+  };
+  
+  // カスタムジオメトリを作成
+  const segments = 32;
+  const geometry = new THREE.BufferGeometry();
+  const vertices: number[] = [];
+  const indices: number[] = [];
+  const normals: number[] = [];
+  
+  const width = RAIL_THICKNESS;
+  const height = RAIL_HEIGHT;
+  
+  // 各セグメントの頂点を生成
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const x = -RAIL_SLOPE_RUN / 2 + RAIL_SLOPE_RUN * t;
+    
+    // ease-in-out カーブで高さを計算（より直線的）
+    const easedT = easeInOutQuad(t);
+    const y = startY + totalRise * easedT + RAIL_HEIGHT / 2;
+    
+    // レール断面の4つの頂点を追加
+    vertices.push(
+      x, y - height/2, -width/2, // 下左
+      x, y - height/2, width/2,  // 下右
+      x, y + height/2, width/2,  // 上右
+      x, y + height/2, -width/2  // 上左
+    );
+    
+    // 法線ベクトルを追加（簡易）
+    for (let j = 0; j < 4; j++) {
+      normals.push(0, 1, 0);
+    }
+  }
+  
+  // インデックスを生成（四角形を三角形2つで構成）
+  for (let i = 0; i < segments; i++) {
+    const base = i * 4;
+    const nextBase = (i + 1) * 4;
+    
+    // 面を構成
+    const faces = [
+      [base, nextBase, nextBase + 1, base + 1], // 下面
+      [base + 1, nextBase + 1, nextBase + 2, base + 2], // 右面
+      [base + 2, nextBase + 2, nextBase + 3, base + 3], // 上面
+      [base + 3, nextBase + 3, nextBase, base], // 左面
+    ];
+    
+    faces.forEach(face => {
+      indices.push(face[0], face[1], face[2]);
+      indices.push(face[0], face[2], face[3]);
+    });
+  }
+  
+  geometry.setIndex(indices);
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.computeVertexNormals();
+  
+  slopeGeometry.value = geometry;
+};
 
 const buildCurveGeometry = () => {
   if (curveGeometry.value) {
@@ -168,11 +244,15 @@ const buildCurveGeometry = () => {
 
 onMounted(() => {
   buildCurveGeometry();
+  buildSlopeGeometry();
 });
 
 watch(
   () => props.rail,
-  () => buildCurveGeometry(),
+  () => {
+    buildCurveGeometry();
+    buildSlopeGeometry();
+  },
   { deep: true }
 );
 </script>
