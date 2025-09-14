@@ -13,7 +13,7 @@ export function useCameraController() {
   const isFrontLookActive = ref(false);
 
   // Constants
-  const FRONT_OFFSET: [number, number, number] = [0, 0.07, -0.45]; // ごく少し前寄りから撮る（yは車両高さに加算）
+  const FRONT_OFFSET: [number, number, number] = [0, 0.15, -0.85]; // ごく少し前寄りから撮る（yは車両高さに加算）
   const CAM_POS_LERP = 0.18;
   const CAM_ROT_LERP = 0.12;
   const ORBIT_INITIAL_POSITION: [number, number, number] = [15, 8, 15];
@@ -64,6 +64,7 @@ export function useCameraController() {
     cameraRotation.value = [...ORBIT_INITIAL_ROTATION];
   };
 
+  //　フロントカメラを手動で操作する場合の処理
   const handleTrainPose = (payload: { position: [number, number, number]; rotation: [number, number, number] }) => {
     if (cameraMode.value !== "front") return;
 

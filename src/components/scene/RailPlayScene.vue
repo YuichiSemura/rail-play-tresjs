@@ -8,6 +8,7 @@
     @pointerup="onPointerUp"
     @pointerleave="onPointerUp"
   >
+    <Sky />
     <!-- Main Camera (orbit / front 共用) -->
     <TresPerspectiveCamera
       ref="cameraRef"
@@ -22,7 +23,7 @@
       ref="orbitControlsRef"
       :maxPolarAngle="Math.PI / 2 - 0.005"
       :minDistance="3"
-      :maxDistance="50"
+      :maxDistance="70"
       :minAzimuthAngle="-Infinity"
       :maxAzimuthAngle="Infinity"
       :minPolarAngle="0"
@@ -69,31 +70,6 @@
     <TresMesh :position="[0, 0.05, 0]">
       <TresSphereGeometry :args="[0.07, 16, 16]" />
       <TresMeshStandardMaterial color="#FFD700" />
-    </TresMesh>
-
-    <!-- 壁（方角表示用） -->
-    <!-- 北の壁（白系） -->
-    <TresMesh :position="[0, 5, -AREA_LIMIT]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#F5F5F5" :side="2" />
-    </TresMesh>
-
-    <!-- 南の壁（白系） -->
-    <TresMesh :position="[0, 5, AREA_LIMIT]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#FAFAFA" :side="2" />
-    </TresMesh>
-
-    <!-- 東の壁（白系） -->
-    <TresMesh :position="[AREA_LIMIT, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#F7F7F7" :side="2" />
-    </TresMesh>
-
-    <!-- 西の壁（白系） -->
-    <TresMesh :position="[-AREA_LIMIT, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#FFFFFF" :side="2" />
     </TresMesh>
 
     <!-- Rails -->
@@ -164,7 +140,7 @@
 <script setup lang="ts">
 import { TresCanvas } from "@tresjs/core";
 import { shallowRef, onMounted } from "vue";
-import { OrbitControls } from "@tresjs/cientos";
+import { OrbitControls, Sky } from "@tresjs/cientos";
 import RailSegment from "../rail/RailSegment.vue";
 import Train from "../train/Train.vue";
 import SceneryTree from "../scenery/SceneryTree.vue";

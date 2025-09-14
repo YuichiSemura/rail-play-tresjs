@@ -25,9 +25,13 @@ export function useGhostPreview(
   rails: Ref<Rail[]>,
   selectedTool: Ref<string>,
   gameMode: Ref<string>,
-  createRail: (x: number, z: number, type: "straight" | "curve" | "slope" | "station" | "crossing") => Rail
+  createRail: (
+    x: number,
+    z: number,
+    type: "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
+  ) => Rail
 ) {
-  const { makeLeftCurve, makeRightCurve } = useRailsGeometry();
+  const { makeLeftCurve, makeRightCurve, makeLeftCurveSlope, makeRightCurveSlope } = useRailsGeometry();
 
   // State
   const lastPointer = ref<{ x: number; z: number } | null>(null);
@@ -85,6 +89,8 @@ export function useGhostPreview(
       selectedTool.value === "straight" ||
       selectedTool.value === "curve" ||
       selectedTool.value === "slope" ||
+      selectedTool.value === "curve-slope-up" ||
+      selectedTool.value === "curve-slope-down" ||
       selectedTool.value === "station" ||
       selectedTool.value === "crossing"
     ) {
@@ -95,7 +101,7 @@ export function useGhostPreview(
         const gr = createRail(
           lastPointer.value.x,
           lastPointer.value.z,
-          selectedTool.value as "straight" | "curve" | "slope" | "station" | "crossing"
+          selectedTool.value as "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
         );
         if (gr.type === "straight" || gr.type === "slope" || gr.type === "station" || gr.type === "crossing") {
           gr.rotation = [gr.rotation[0], desired, gr.rotation[2]];
@@ -111,6 +117,7 @@ export function useGhostPreview(
               end: [ix + dirX * len, iy, iz + dirZ * len],
             };
           } else if (gr.type === "slope") {
+            console.log("slope ghost");
             gr.connections = {
               start: [ix - dirX * len, startY, iz - dirZ * len],
               end: [ix + dirX * len, endY, iz + dirZ * len],
@@ -141,6 +148,26 @@ export function useGhostPreview(
           const chosen = dL <= dR ? makeLeftCurve(pose) : makeRightCurve(pose);
           ghostRail.value = chosen;
           return;
+        } else if (gr.type === "curve-slope") {
+          // curve-slope-up/curve-slope-downの処理
+          const base = gr.rotation[1];
+          const leftYaw = base + CURVE_ANGLE;
+          const rightYaw = base - CURVE_ANGLE;
+          const norm = (a: number) => {
+            let d = a;
+            while (d > Math.PI) d -= 2 * Math.PI;
+            while (d < -Math.PI) d += 2 * Math.PI;
+            return d;
+          };
+          const dL = Math.abs(norm(desired - leftYaw));
+          const dR = Math.abs(norm(desired - rightYaw));
+          // 再生成して一貫性確保
+          const pose: Pose = { point: gr.connections.start, theta: base };
+          // selectedTool.valueに応じて上り下りを決定
+          const ascending = selectedTool.value === "curve-slope-up";
+          const chosen = dL <= dR ? makeLeftCurveSlope(pose, ascending) : makeRightCurveSlope(pose, ascending);
+          ghostRail.value = chosen;
+          return;
         }
         ghostRail.value = gr;
         return;
@@ -159,6 +186,12 @@ export function useGhostPreview(
       } else if (selectedTool.value === "crossing") {
         if (!lastPointer.value) return;
         ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "crossing");
+      } else if (selectedTool.value === "curve-slope-up") {
+        if (!lastPointer.value) return;
+        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve-slope-up");
+      } else if (selectedTool.value === "curve-slope-down") {
+        if (!lastPointer.value) return;
+        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve-slope-down");
       }
       return;
     }

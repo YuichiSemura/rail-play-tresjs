@@ -172,7 +172,19 @@ interface TrainCustomization {
 
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<
-  "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "crossing" | "rotate" | "delete"
+  | "none"
+  | "straight"
+  | "curve"
+  | "slope"
+  | "curve-slope-up"
+  | "curve-slope-down"
+  | "tree"
+  | "building"
+  | "pier"
+  | "station"
+  | "crossing"
+  | "rotate"
+  | "delete"
 >("none");
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number]; rotation?: [number, number, number] }[]>([]);
@@ -235,8 +247,20 @@ const {
 } = useCameraController();
 
 // 幾何ロジック（切り出し）
-const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd, canPlaceSlope, canPlaceRail, canPlacePier } =
-  useRailsGeometry();
+const {
+  makeStraight,
+  makeSlope,
+  makeLeftCurve,
+  makeRightCurve,
+  makeLeftCurveSlope,
+  makeRightCurveSlope,
+  makeStation,
+  makeCrossing,
+  poseFromRailEnd,
+  canPlaceSlope,
+  canPlaceRail,
+  canPlacePier,
+} = useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -246,6 +270,7 @@ const isLoopComplete = (): boolean => {
 
   const distance = Math.sqrt(
     (firstRail.connections.start[0] - lastRail.connections.end[0]) ** 2 +
+      (firstRail.connections.start[1] - lastRail.connections.end[1]) ** 2 +
       (firstRail.connections.start[2] - lastRail.connections.end[2]) ** 2
   );
 
@@ -285,7 +310,11 @@ const snapToGridSize = (position: number, size: number): number => {
 
 // 進行端点の姿勢は共通型を使用
 
-const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" | "station" | "crossing"): Rail => {
+const createRail = (
+  x: number,
+  z: number,
+  type: "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
+): Rail => {
   // 前のレール終端姿勢（なければ原点+X）
   let pose: Pose = { point: [0, 0, 0], theta: 0 };
   if (rails.value.length > 0) {
@@ -293,6 +322,7 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
   } else {
     // 最初はクリック位置をグリッドスナップして開始点にする
     pose.point = [snapToGrid(x), 0, snapToGrid(z)];
+    console.log("First rail pose set to", pose);
   }
 
   if (type === "straight") {
@@ -309,7 +339,25 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
     // 2本目以降はクリック位置に依存せず、末端の姿勢そのままに固定長で追加
     return makeStraight(pose, RAIL_STRAIGHT_FULL_LENGTH);
   } else if (type === "curve") {
-    // クリックが接線の左側か右側かで分岐
+    // 最初の一本の場合はplacementYawに基づいて左右を決定（ゴーストと統一）
+    if (rails.value.length === 0) {
+      const desired = getPlacementRotation();
+      const base = pose.theta;
+      const leftYaw = base + CURVE_ANGLE;
+      const rightYaw = base - CURVE_ANGLE;
+      const norm = (a: number) => {
+        let d = a;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        return d;
+      };
+      const dL = Math.abs(norm(desired - leftYaw));
+      const dR = Math.abs(norm(desired - rightYaw));
+      console.log("pose:", pose);
+      return dL <= dR ? makeLeftCurve(pose) : makeRightCurve(pose);
+    }
+
+    // 2本目以降はクリックが接線の左側か右側かで分岐
     const leftSide = (() => {
       const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
       const vx = snapToGrid(x) - pose.point[0];
@@ -324,38 +372,42 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
     const sz = pose.point[2];
     const tx = snapToGrid(x);
     const tz = snapToGrid(z);
-    
+
+    let ascending = true; // デフォルトは上り
+
     if (rails.value.length === 0) {
       const dx0 = tx - sx;
       const dz0 = tz - sz;
       if (Math.hypot(dx0, dz0) > 1e-3) {
         pose.theta = Math.atan2(dz0, dx0);
       }
+      // 最初のスロープは常に上り
+      ascending = true;
+    } else {
+      // 2本目以降はカメラ位置から見た判定
+      const cameraX = cameraPosition.value[0];
+      const cameraZ = cameraPosition.value[2];
+
+      // カメラからレール開始点へのベクトル
+      const cameraToRailX = sx - cameraX;
+      const cameraToRailZ = sz - cameraZ;
+
+      // カメラからクリック位置へのベクトル
+      const cameraToClickX = tx - cameraX;
+      const cameraToClickZ = tz - cameraZ;
+
+      // カメラからの距離を比較
+      // クリック位置がレール開始点より遠い場合は上り、近い場合は下り
+      const railDistance = Math.hypot(cameraToRailX, cameraToRailZ);
+      const clickDistance = Math.hypot(cameraToClickX, cameraToClickZ);
+      ascending = clickDistance > railDistance;
     }
-    
-    // カメラ位置から見た判定
-    const cameraX = cameraPosition.value[0];
-    const cameraZ = cameraPosition.value[2];
-    
-    // カメラからレール開始点へのベクトル
-    const cameraToRailX = sx - cameraX;
-    const cameraToRailZ = sz - cameraZ;
-    
-    // カメラからクリック位置へのベクトル
-    const cameraToClickX = tx - cameraX;
-    const cameraToClickZ = tz - cameraZ;
-    
-    // カメラからの距離を比較
-    // クリック位置がレール開始点より遠い場合は上り、近い場合は下り
-    const railDistance = Math.hypot(cameraToRailX, cameraToRailZ);
-    const clickDistance = Math.hypot(cameraToClickX, cameraToClickZ);
-    const ascending = clickDistance > railDistance;
-    
+
     // 地面より下がるかチェック、高さ制限チェック
     if (!canPlaceSlope(pose, ascending)) {
       throw new Error("スロープが地面より下がるか、高さ制限を超えるため配置できません");
     }
-    
+
     return makeSlope(pose, ascending);
   } else if (type === "station") {
     // 駅ホームレール（直線レールと同様の処理）
@@ -379,6 +431,40 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
       return makeCrossing(pose, RAIL_STRAIGHT_FULL_LENGTH);
     }
     return makeCrossing(pose, RAIL_STRAIGHT_FULL_LENGTH);
+  } else if (type === "curve-slope-up") {
+    // curve-slope-up（マウス位置で左右判定、常に上り）
+    const tx = snapToGrid(x);
+    const tz = snapToGrid(z);
+
+    // 左右判定（curveと同じ）
+    const leftSide = (() => {
+      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const vx = tx - pose.point[0];
+      const vz = tz - pose.point[2];
+      const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
+      return cross > 0; // 左側なら正
+    })();
+
+    // 常に上り
+    const ascending = true;
+    return leftSide ? makeLeftCurveSlope(pose, ascending) : makeRightCurveSlope(pose, ascending);
+  } else if (type === "curve-slope-down") {
+    // curve-slope-down（マウス位置で左右判定、常に下り）
+    const tx = snapToGrid(x);
+    const tz = snapToGrid(z);
+
+    // 左右判定（curveと同じ）
+    const leftSide = (() => {
+      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const vx = tx - pose.point[0];
+      const vz = tz - pose.point[2];
+      const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
+      return cross > 0; // 左側なら正
+    })();
+
+    // 常に下り
+    const ascending = false;
+    return leftSide ? makeLeftCurveSlope(pose, ascending) : makeRightCurveSlope(pose, ascending);
   }
 
   // 何も該当しない場合のデフォルト（型安全性のため）
@@ -432,30 +518,32 @@ const addBuildingAt = (x: number, z: number) => {
 const addPierAt = (x: number, z: number) => {
   const px = snapToGridSize(x, 1);
   const pz = snapToGridSize(z, 1);
-  
+
   // 配置可能かチェック（仮の位置で）
   const tempPosition: [number, number, number] = [px, 0, pz];
   const placementResult = canPlacePier(tempPosition, rails.value);
-  
+
   if (!placementResult.canPlace) {
     showNotification(placementResult.error || "橋脚を配置できません", "warning");
     return;
   }
-  
+
   // 正しい位置と設定を取得
   const correctPosition = placementResult.correctPosition || [px, 0, pz];
   const railHeight = placementResult.railHeight || 0;
   const pierRotation = placementResult.rotation || 0;
-  
+
   // 重複チェック
-  if (!piers.value.some((p) => Math.hypot(p.position[0] - correctPosition[0], p.position[2] - correctPosition[2]) < 0.1)) {
+  if (
+    !piers.value.some((p) => Math.hypot(p.position[0] - correctPosition[0], p.position[2] - correctPosition[2]) < 0.1)
+  ) {
     // 橋脚の高さは線路の高さに合わせる（線路を支えるため）
     const pierHeight = Math.max(0.7, railHeight);
-    
-    piers.value.push({ 
+
+    piers.value.push({
       position: correctPosition as [number, number, number],
-      height: pierHeight, 
-      rotation: [0, pierRotation, 0] 
+      height: pierHeight,
+      rotation: [0, pierRotation, 0],
     });
   }
 };
@@ -495,7 +583,13 @@ const onPlaneClick = (event: ClickEvent) => {
   // クリックでも最終ポインタを更新（カーブのプレビューに必要）
   updatePointer(point.x, point.z);
 
-  if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
+  if (
+    selectedTool.value === "straight" ||
+    selectedTool.value === "curve" ||
+    selectedTool.value === "slope" ||
+    selectedTool.value === "curve-slope-up" ||
+    selectedTool.value === "curve-slope-down"
+  ) {
     // 周回状態では新しい線路を配置できない
     if (isRailsLocked.value) {
       showNotification(
@@ -516,13 +610,13 @@ const onPlaneClick = (event: ClickEvent) => {
       }
       return;
     }
-    
+
     // エリア内チェック
     if (!canPlaceRail(newRail)) {
       showNotification("レールがエリア外に出るため配置できません", "warning");
       return;
     }
-    
+
     // 最初の一本は向き調整（R/Eの事前回転）を尊重
     if (rails.value.length === 0) {
       if (newRail.type === "straight" || newRail.type === "slope") {
@@ -1272,8 +1366,10 @@ const createSlopeUpDownCurvesPreset = () => {
   add(makeSlope(pose, false));
   // カーブ x4（左）
   for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
+  console.log("pose before station:", pose);
   // 駅ホーム
   add(makeStation(pose));
+  console.log("pose after station:", pose);
   for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
   // 上り→下り
   add(makeSlope(pose, true));

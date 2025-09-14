@@ -47,6 +47,28 @@
           スロープ
         </v-btn>
       </v-item>
+      <v-item value="curve-slope-up" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-chart-timeline-variant</v-icon>
+          曲線スロープ（上り）
+        </v-btn>
+      </v-item>
+      <v-item value="curve-slope-down" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-chart-timeline-variant-reverse</v-icon>
+          曲線スロープ（下り）
+        </v-btn>
+      </v-item>
       <v-item value="crossing" v-slot="{ isSelected, toggle }">
         <v-btn
           :color="isSelected ? 'primary' : undefined"
@@ -279,7 +301,7 @@
                 <template v-if="ghostRail">
                   <div>
                     Type: {{ ghostRail.type }}
-                    {{ ghostRail.type === "curve" ? `(${ghostRail.direction})` : "" }}
+                    {{ (ghostRail.type === "curve" || ghostRail.type === "curve-slope") ? `(${ghostRail.direction})` : "" }}
                   </div>
                   <div>
                     Position: [
@@ -336,7 +358,7 @@
               <div>
                 <strong>Rail {{ index }}:</strong>
               </div>
-              <div>Type: {{ rail.type }}</div>
+              <div>Type: {{ rail.type }}{{ (rail.type === "curve" || rail.type === "curve-slope") ? ` (${rail.direction})` : "" }}</div>
               <div>
                 Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
                 {{ rail.position[2].toFixed(2) }}]
@@ -399,6 +421,8 @@ interface Props {
     | "straight"
     | "curve"
     | "slope"
+    | "curve-slope-up"
+    | "curve-slope-down"
     | "tree"
     | "building"
     | "pier"
@@ -436,6 +460,8 @@ const emit = defineEmits<{
       | "straight"
       | "curve"
       | "slope"
+      | "curve-slope-up"
+      | "curve-slope-down"
       | "tree"
       | "building"
       | "pier"
@@ -465,6 +491,8 @@ const selectedToolProxy = computed({
       | "straight"
       | "curve"
       | "slope"
+      | "curve-slope-up"
+      | "curve-slope-down"
       | "tree"
       | "building"
       | "pier"
@@ -486,7 +514,7 @@ watch(
   () => props.isRailsLocked,
   (isLocked) => {
     if (isLocked) {
-      const railTools = ["straight", "curve", "slope", "station", "crossing"];
+      const railTools = ["straight", "curve", "slope", "curve-slope-up", "curve-slope-down", "station", "crossing"];
       if (railTools.includes(props.selectedTool)) {
         emit("update:selectedTool", "tree");
       }

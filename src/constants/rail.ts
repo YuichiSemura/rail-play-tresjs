@@ -26,6 +26,7 @@ export const RAIL_HEIGHT = 0.1;
 // 直線の二倍（長さ4）の間に高さ1上がる
 export const RAIL_SLOPE_RUN = RAIL_STRAIGHT_FULL_LENGTH * 2; // 4
 export const RAIL_SLOPE_RISE = 0.7; // +0.7 上昇
+export const RAIL_CURVE_SLOPE_RISE = RAIL_SLOPE_RISE / 4; // 曲線スロープの上昇 = 0.175
 export const RAIL_SLOPE_PITCH = Math.atan(RAIL_SLOPE_RISE / RAIL_SLOPE_RUN); // 傾斜角 ≈ 14°
 export const RAIL_SLOPE_LENGTH_3D = Math.sqrt(RAIL_SLOPE_RUN ** 2 + RAIL_SLOPE_RISE ** 2);
 
