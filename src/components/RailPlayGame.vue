@@ -311,7 +311,6 @@ const snapToGridSize = (position: number, size: number): number => {
 };
 
 // 進行端点の姿勢は共通型を使用
-
 const createRail = (
   x: number,
   z: number,
@@ -324,7 +323,6 @@ const createRail = (
   } else {
     // 最初はクリック位置をグリッドスナップして開始点にする
     pose.point = [snapToGrid(x), 0, snapToGrid(z)];
-    console.log("First rail pose set to", pose);
   }
 
   if (type === "straight") {
@@ -355,7 +353,6 @@ const createRail = (
       };
       const dL = Math.abs(norm(desired - leftYaw));
       const dR = Math.abs(norm(desired - rightYaw));
-      console.log("pose:", pose);
       return dL <= dR ? makeLeftCurve(pose) : makeRightCurve(pose);
     }
 
@@ -409,7 +406,6 @@ const createRail = (
     if (!canPlaceSlope(pose, ascending)) {
       throw new Error("スロープが地面より下がるか、高さ制限を超えるため配置できません");
     }
-    console.log("pose for slope:", pose, "ascending:", ascending);
     return makeSlope(pose, ascending);
   } else if (type === "station") {
     // 駅ホームレール（直線レールと同様の処理）
@@ -1369,10 +1365,8 @@ const createSlopeUpDownCurvesPreset = () => {
   add(makeSlope(pose, false));
   // カーブ x4（左）
   for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
-  console.log("pose before station:", pose);
   // 駅ホーム
   add(makeStation(pose));
-  console.log("pose after station:", pose);
   for (let i = 0; i < 2; i++) add(makeLeftCurve(pose));
   // 上り→下り
   add(makeSlope(pose, true));

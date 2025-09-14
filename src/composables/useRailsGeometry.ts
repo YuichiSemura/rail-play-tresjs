@@ -238,7 +238,6 @@ export function useRailsGeometry() {
   const getRailRotationAtConnection = (rail: Rail, connectionType: "start" | "end"): number => {
     // 線路の接線方向を取得
     let railDirection: number;
-    console.log((rail.rotation[1] / Math.PI) * 180);
     if (rail.type === "curve" || rail.type === "curve-slope") {
       // カーブの場合、接続点での接線方向を計算
       const baseRotation = rail.rotation[1];
