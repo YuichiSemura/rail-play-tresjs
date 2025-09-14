@@ -146,7 +146,7 @@ export function useCameraController() {
 
     // 電車の進行方向（スロープでのピッチ） + ユーザー手動調整 + 先読み補間 + スムージング
     const targetYaw = stabilizedYaw + frontLookYaw.value;
-    const targetPitch = -pitch / 3 + frontLookPitch.value; // ピッチは元の傾斜を忠実に（/3 を撤回）
+    const targetPitch = -pitch + frontLookPitch.value; // ピッチは元の傾斜を忠実に（/3 を撤回）
 
     // 現在値から目標へ補間
     cameraPosition.value = lerp3(cameraPosition.value, targetPos, CAM_POS_LERP);
