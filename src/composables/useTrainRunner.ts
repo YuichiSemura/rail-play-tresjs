@@ -224,6 +224,9 @@ export function useTrainRunner(
     railType?: string;
     curveDirection?: string;
     secondCarPosition?: [number, number, number];
+    currentEndYaw?: number;
+    nextEndYaw?: number;
+    segmentProgress?: number; // 現在レール内の進行度(0-1)
   }) => {
     trainPoseCallbacks.forEach((callback) => callback(pose));
   };
@@ -293,12 +296,45 @@ export function useTrainRunner(
     // 注意: カメラ向きの調整のため、yaw角度からMath.PIを引いている
     const currentRail = rails.value[idx] || rails.value[0];
     const secondCarPosition = poses.length >= 2 ? poses[1].position : undefined;
+
+    // 現在レール終端方向と次レール終端方向の yaw を算出し、フロントカメラ向き補間に利用できるよう渡す
+    const computeStraightYaw = (sx: number, sz: number, ex: number, ez: number) => {
+      // NOTE: dz は end - start が正しい（以前 - (end - start) になっていたため向きが逆転していた）
+      const dx = ex - sx;
+      const dz = ez - sz;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = dx / len;
+      const nz = dz / len;
+      return Math.atan2(nx, nz);
+    };
+
+    const endYawOf = (r: Rail): number => {
+      if (r.type === "straight" || r.type === "station" || r.type === "crossing" || r.type === "slope") {
+        return computeStraightYaw(
+          r.connections.start[0],
+          r.connections.start[2],
+          r.connections.end[0],
+          r.connections.end[2]
+        );
+      }
+      // curve / curve-slope: getPoseOnRail で t=1 の rotation[1] を取得
+      const poseEnd = getPoseOnRail(r, 1);
+      return poseEnd.rotation[1];
+    };
+
+    const currentEndYaw = currentRail ? endYawOf(currentRail) : undefined;
+    const nextRail = rails.value[(idx + 1) % rails.value.length];
+    const nextEndYaw = nextRail ? endYawOf(nextRail) : undefined;
+
     emitTrainPose({
       position: lead.position,
       rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]],
       railType: currentRail?.type,
       curveDirection: currentRail && "direction" in currentRail ? currentRail.direction : undefined,
       secondCarPosition,
+      currentEndYaw,
+      nextEndYaw,
+      segmentProgress: t,
     });
   };
 
