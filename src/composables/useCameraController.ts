@@ -1,6 +1,6 @@
 import { ref, watch } from "vue";
 
-export type CameraMode = "orbit" | "front";
+export type CameraMode = "orbit" | "front" | "follow";
 
 export function useCameraController() {
   // State
@@ -11,6 +11,8 @@ export function useCameraController() {
   const frontLookPitch = ref(0); // radians
   const frontLookYaw = ref(0); // radians
   const isFrontLookActive = ref(false);
+  // Follow mode target position (2両目の位置)
+  const followTarget = ref<[number, number, number]>([0, 0, 0]);
 
   // Constants
   const FRONT_OFFSET: [number, number, number] = [0, 0.15, -0.85]; // ごく少し前寄りから撮る（yは車両高さに加算）
@@ -55,7 +57,13 @@ export function useCameraController() {
 
   // Public methods
   const toggleCameraMode = () => {
-    cameraMode.value = cameraMode.value === "orbit" ? "front" : "orbit";
+    if (cameraMode.value === "orbit") {
+      cameraMode.value = "front";
+    } else if (cameraMode.value === "front") {
+      cameraMode.value = "follow";
+    } else {
+      cameraMode.value = "orbit";
+    }
   };
 
   const resetToOrbit = () => {
@@ -64,20 +72,48 @@ export function useCameraController() {
     cameraRotation.value = [...ORBIT_INITIAL_ROTATION];
   };
 
-  //　フロントカメラを手動で操作する場合の処理
-  const handleTrainPose = (payload: { position: [number, number, number]; rotation: [number, number, number] }) => {
+  // Constants for curve camera adjustment
+  const CURVE_LOOK_AHEAD_ANGLE = Math.PI / 4; // 約45度、カーブ内側を向く角度
+
+  //　フロントカメラとフォローカメラの処理
+  const handleTrainPose = (payload: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    railType?: string;
+    curveDirection?: string;
+    secondCarPosition?: [number, number, number];
+  }) => {
+    // フォローモード: 2両目を注視点として設定
+    if (cameraMode.value === "follow" && payload.secondCarPosition) {
+      followTarget.value = payload.secondCarPosition;
+      return;
+    }
+
     if (cameraMode.value !== "front") return;
 
     const [px, py, pz] = payload.position;
-    const [, yaw] = payload.rotation;
+    const [pitch, yaw] = payload.rotation; // スロープでのピッチ角度も取得
 
     // yaw に基づきローカルオフセットを回転
     const ox = FRONT_OFFSET[0] * Math.cos(yaw) - FRONT_OFFSET[2] * Math.sin(yaw);
     const oz = FRONT_OFFSET[0] * Math.sin(yaw) + FRONT_OFFSET[2] * Math.cos(yaw);
     const targetPos: [number, number, number] = [px - ox, py + FRONT_OFFSET[1], pz + oz];
-    // 先頭視点の微調整（上下左右±15°）を加味
-    const targetYaw = yaw + frontLookYaw.value;
-    const targetPitch = frontLookPitch.value;
+
+    // カーブでのカメラ角度調整: カーブの内側方向へ少し向ける
+    let curveAdjustment = 0;
+    if (payload.railType === "curve" || payload.railType === "curve-slope") {
+      if (payload.curveDirection === "left") {
+        // 左カーブ: カメラを左（内側）に向ける
+        curveAdjustment = CURVE_LOOK_AHEAD_ANGLE;
+      } else if (payload.curveDirection === "right") {
+        // 右カーブ: カメラを右（内側）に向ける
+        curveAdjustment = -CURVE_LOOK_AHEAD_ANGLE;
+      }
+    }
+
+    // 電車の進行方向（スロープでのピッチ）とユーザーの手動調整、カーブ調整を合成
+    const targetYaw = yaw + frontLookYaw.value + curveAdjustment;
+    const targetPitch = -pitch + frontLookPitch.value; // スロープの傾斜 + 手動調整
 
     // 現在値から目標へ補間
     cameraPosition.value = lerp3(cameraPosition.value, targetPos, CAM_POS_LERP);
@@ -103,6 +139,7 @@ export function useCameraController() {
     cameraMode,
     cameraPosition,
     cameraRotation,
+    followTarget,
 
     // Methods
     toggleCameraMode,

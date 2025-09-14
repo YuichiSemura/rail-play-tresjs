@@ -121,16 +121,6 @@
           橋脚
         </v-btn>
       </v-item>
-      <v-item value="rotate" v-slot="{ isSelected, toggle }">
-        <v-btn
-          :color="isSelected ? 'primary' : undefined"
-          :variant="isSelected ? 'elevated' : 'outlined'"
-          @click="toggle"
-        >
-          <v-icon>mdi-rotate-3d-variant</v-icon>
-          回転
-        </v-btn>
-      </v-item>
       <v-item value="delete" v-slot="{ isSelected, toggle }">
         <v-btn
           :color="isSelected ? 'primary' : undefined"
@@ -143,9 +133,7 @@
       </v-item>
     </v-item-group>
 
-    <div v-if="selectedTool === 'rotate'" class="mt-3">
-      <v-alert type="info"> 回転したいレールをクリックしてください </v-alert>
-    </div>
+    <!-- rotate ツール削除 -->
 
     <v-divider class="my-4" />
 
@@ -194,13 +182,7 @@
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn
-          color="secondary"
-          @click="$emit('loadCurveSlopePreset')"
-          :disabled="rails.length > 0"
-          block
-          class="mb-2"
-        >
+        <v-btn color="secondary" @click="$emit('loadCurveSlopePreset')" :disabled="rails.length > 0" block class="mb-2">
           <v-icon size="small">mdi-file-document-outline</v-icon>
           <span class="text-caption">曲線スロープ</span>
         </v-btn>
@@ -307,7 +289,9 @@
                 <template v-if="ghostRail">
                   <div>
                     Type: {{ ghostRail.type }}
-                    {{ (ghostRail.type === "curve" || ghostRail.type === "curve-slope") ? `(${ghostRail.direction})` : "" }}
+                    {{
+                      ghostRail.type === "curve" || ghostRail.type === "curve-slope" ? `(${ghostRail.direction})` : ""
+                    }}
                   </div>
                   <div>
                     Position: [
@@ -364,7 +348,10 @@
               <div>
                 <strong>Rail {{ index }}:</strong>
               </div>
-              <div>Type: {{ rail.type }}{{ (rail.type === "curve" || rail.type === "curve-slope") ? ` (${rail.direction})` : "" }}</div>
+              <div>
+                Type: {{ rail.type
+                }}{{ rail.type === "curve" || rail.type === "curve-slope" ? ` (${rail.direction})` : "" }}
+              </div>
               <div>
                 Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
                 {{ rail.position[2].toFixed(2) }}]
@@ -434,7 +421,6 @@ interface Props {
     | "pier"
     | "station"
     | "crossing"
-    | "rotate"
     | "delete";
   currentTitle: string;
   rails: Rail[];
@@ -473,7 +459,6 @@ const emit = defineEmits<{
       | "pier"
       | "station"
       | "crossing"
-      | "rotate"
       | "delete"
   ];
   "update:currentTitle": [value: string];
@@ -504,7 +489,6 @@ const selectedToolProxy = computed({
       | "pier"
       | "station"
       | "crossing"
-      | "rotate"
       | "delete"
   ) => emit("update:selectedTool", v),
 });

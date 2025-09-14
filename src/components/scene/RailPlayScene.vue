@@ -17,13 +17,14 @@
       :fov="cameraMode === 'orbit' ? 50 : 70"
     />
 
-    <!-- Controls (orbit モード時のみ) -->
+    <!-- Controls (orbit と follow モード時) -->
     <OrbitControls
-      v-if="cameraMode === 'orbit'"
+      v-if="cameraMode === 'orbit' || cameraMode === 'follow'"
       ref="orbitControlsRef"
+      :target="cameraMode === 'follow' ? followTarget : undefined"
       :maxPolarAngle="Math.PI / 2 - 0.005"
       :minDistance="3"
-      :maxDistance="70"
+      :maxDistance="cameraMode === 'follow' ? 6 : 70"
       :minAzimuthAngle="-Infinity"
       :maxAzimuthAngle="Infinity"
       :minPolarAngle="0"
@@ -171,7 +172,8 @@ interface Props {
   // カメラ関連
   cameraPosition: [number, number, number];
   cameraRotation: [number, number, number];
-  cameraMode: "orbit" | "front";
+  cameraMode: "orbit" | "front" | "follow";
+  followTarget: [number, number, number];
 
   // ゲームオブジェクト
   rails: Rail[];

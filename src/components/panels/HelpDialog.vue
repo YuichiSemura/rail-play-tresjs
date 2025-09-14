@@ -93,7 +93,7 @@
               <h4 class="mb-2">操作方法</h4>
               <ul>
                 <li>クリックで配置、配置済みアイテムをクリックで削除</li>
-                <li>回転ツールでアイテムの向きを90°ずつ調整可能</li>
+                <li>配置方向の回転は R/E キーで行えます（レール初回配置や装飾の向き調整）。</li>
               </ul>
             </v-expansion-panel-text>
           </v-expansion-panel>
@@ -108,7 +108,7 @@
               <h4 class="mb-2">運転モード</h4>
               <ul class="mb-3">
                 <li><strong>自動運転:</strong> 周回コース完成時に自動でモード切替、電車が走行開始</li>
-                <li><strong>速度調整:</strong> スライダーで電車の速度を0.5倍〜2.0倍に調整</li>
+                <li><strong>速度調整:</strong> スライダーで電車の速度を0.1倍〜8.0倍に調整</li>
                 <li><strong>3両編成:</strong> 機関車＋客車2両の編成で走行</li>
                 <li><strong>スロープ走行:</strong> 坂道では滑らかな高度変化で走行</li>
               </ul>
@@ -116,6 +116,13 @@
               <ul class="mb-3">
                 <li><strong>自由視点（Orbit）:</strong> マウスで自由に視点を回転・移動</li>
                 <li><strong>先頭カメラ（Front）:</strong> 電車の先頭に追従、ドラッグで視線微調整</li>
+                <li><strong>車両注視（Follow）:</strong> 2両目を中心に注視、OrbitControlsで自由な角度から電車を観察</li>
+              </ul>
+              <h4 class="mb-2">カメラモードの特徴</h4>
+              <ul class="mb-3">
+                <li><strong>自由視点:</strong> 固定視点から全体を俯瞰、レール配置の確認に最適</li>
+                <li><strong>先頭カメラ:</strong> 運転士視点で臨場感ある体験、カーブでは自動的に内側を向く</li>
+                <li><strong>車両注視:</strong> 電車を外部から動的に観察、迫力あるアングルで運行を楽しめる</li>
               </ul>
               <h4 class="mb-2">電車カスタマイズモード</h4>
               <ul>
@@ -133,14 +140,12 @@
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <ul>
-                <li><strong>大きな円:</strong> 左カーブのみで構成されるシンプルな円形コース</li>
-                <li><strong>楕円レイアウト:</strong> 直線＋左カーブで構成される楕円形コース</li>
-                <li><strong>S字カーブ:</strong> 左右カーブを組み合わせた複雑な周回コース（景観付き）</li>
-                <li><strong>スロープ付き楕円:</strong> 上り・下りスロープと駅・踏切を含む立体コース</li>
+                <li><strong>オーバル:</strong> 直線＋左カーブで構成される楕円形コース</li>
+                <li><strong>S字:</strong> 左右カーブを組み合わせた複雑な周回コース（景観付き）</li>
+                <li><strong>スロープ:</strong> 上り・下りスロープと駅・踏切を含む立体コース</li>
+                <li><strong>曲線スロープ:</strong> 曲線スロープを含む高度な3D立体レイアウト</li>
               </ul>
-              <p class="text-medium-emphasis mt-2">
-                ※ プリセット選択時は既存のレール・建物がすべて削除されます
-              </p>
+              <p class="text-medium-emphasis mt-2">※ プリセット選択時は既存のレール・建物がすべて削除されます</p>
             </v-expansion-panel-text>
           </v-expansion-panel>
 

@@ -81,6 +81,7 @@
           :camera-position="cameraPosition"
           :camera-rotation="cameraRotation"
           :camera-mode="cameraMode"
+          :follow-target="followTarget"
           :rails="rails"
           :trees="trees"
           :buildings="buildings"
@@ -150,7 +151,6 @@ import HelpDialog from "./panels/HelpDialog.vue";
 // 共通定数
 import {
   CURVE_SEGMENT_ANGLE as CURVE_ANGLE,
-  RAIL_CURVE_RADIUS,
   RAIL_STRAIGHT_FULL_LENGTH,
   RAIL_STRAIGHT_HALF_LENGTH,
   RAIL_SLOPE_RUN,
@@ -185,7 +185,6 @@ const selectedTool = ref<
   | "pier"
   | "station"
   | "crossing"
-  | "rotate"
   | "delete"
 >("none");
 const rails = ref<Rail[]>([]);
@@ -241,6 +240,7 @@ const {
   cameraMode,
   cameraPosition,
   cameraRotation,
+  followTarget,
   toggleCameraMode,
   resetToOrbit,
   handleTrainPose,
@@ -719,7 +719,7 @@ const onPlaneClick = (event: ClickEvent) => {
     addStationAt(point.x, point.z);
     return;
   }
-  // rotate/delete は平面では何もしない
+  // delete 以外は平面では何もしない（rotate ツール削除済）
 };
 
 const onPlanePointerMove = (event: ClickEvent) => {
@@ -733,53 +733,7 @@ const onCanvasClick = () => {
   // Canvas level click handling if needed
 };
 
-const rotateRail = (rail: Rail) => {
-  // 90度回転させる
-  const newRotationY = rail.rotation[1] + Math.PI / 2;
-  rail.rotation = [rail.rotation[0], newRotationY, rail.rotation[2]];
-
-  // 接続点を再計算（インライン）
-  const [ix, iy, iz] = rail.position;
-  const [, iry] = rail.rotation;
-  if (rail.type === "straight") {
-    const len = RAIL_STRAIGHT_HALF_LENGTH;
-    const dirX = Math.cos(-iry);
-    const dirZ = Math.sin(-iry);
-    rail.connections = { start: [ix - dirX * len, iy, iz - dirZ * len], end: [ix + dirX * len, iy, iz + dirZ * len] };
-  } else if (rail.type === "slope") {
-    const len = RAIL_SLOPE_RUN / 2;
-    const dirX = Math.cos(-iry);
-    const dirZ = Math.sin(-iry);
-    const prevStartY = rail.connections.start[1];
-    const prevEndY = rail.connections.end[1];
-    rail.connections = {
-      start: [ix - dirX * len, prevStartY, iz - dirZ * len],
-      end: [ix + dirX * len, prevEndY, iz + dirZ * len],
-    };
-  } else {
-    const r = RAIL_CURVE_RADIUS;
-    const theta = iry;
-    if (rail.type === "curve" && (rail.direction || "left") === "left") {
-      // Left curve: start = C - n_left(theta), end = C - n_left(theta + Δ)
-      rail.connections = {
-        start: [ix + Math.sin(theta) * r, iy, iz - Math.cos(theta) * r],
-        end: [ix + Math.sin(theta + CURVE_ANGLE) * r, iy, iz - Math.cos(theta + CURVE_ANGLE) * r],
-      };
-    } else {
-      // Right curve: start = C - n_right(theta), end = C - n_right(theta - Δ)
-      rail.connections = {
-        start: [ix - Math.sin(theta) * r, iy, iz + Math.cos(theta) * r],
-        end: [ix - Math.sin(theta - CURVE_ANGLE) * r, iy, iz + Math.cos(theta - CURVE_ANGLE) * r],
-      };
-    }
-  }
-
-  // 周回状態をリセット（回転によって接続が変わる可能性があるため）
-  if (isRailsLocked.value) {
-    isRailsLocked.value = false;
-    gameMode.value = "build";
-  }
-};
+// rotateRail 機能削除
 
 const onRailClick = (rail: Rail) => {
   if (gameMode.value !== "build") return;
@@ -799,8 +753,6 @@ const onRailClick = (rail: Rail) => {
         showNotification("線路の削除は先頭または最後のレールのみ可能です", "warning");
       }
     }
-  } else if (selectedTool.value === "rotate") {
-    rotateRail(rail);
   }
 };
 
@@ -808,11 +760,6 @@ const onTreeClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     trees.value.splice(index, 1);
-  } else if (selectedTool.value === "rotate") {
-    const t = trees.value[index];
-    if (!t) return;
-    const rot = t.rotation ?? [0, 0, 0];
-    t.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -820,11 +767,6 @@ const onBuildingClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     buildings.value.splice(index, 1);
-  } else if (selectedTool.value === "rotate") {
-    const b = buildings.value[index];
-    if (!b) return;
-    const rot = b.rotation ?? [0, 0, 0];
-    b.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -832,11 +774,6 @@ const onPierClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     piers.value.splice(index, 1);
-  } else if (selectedTool.value === "rotate") {
-    const p = piers.value[index];
-    if (!p) return;
-    const rot = p.rotation ?? [0, 0, 0];
-    p.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
