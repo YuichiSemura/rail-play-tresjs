@@ -5,12 +5,14 @@
 ## 前提知識
 
 ### 座標系
+
 - **X軸**: 東西方向（右が正）
 - **Y軸**: 高さ方向（上が正）
 - **Z軸**: 南北方向（手前が正、奥が負）
 - **原点**: (0, 0, 0) がシーンの中心
 
 ### 角度表現
+
 - **theta (θ)**: Y軸周りの回転角度（ラジアン）
 - **0**: Z軸負方向（北）を向く
 - **π/2**: X軸正方向（東）を向く
@@ -18,12 +20,14 @@
 - **3π/2**: X軸負方向（西）を向く
 
 ### Three.jsとの対応
+
 - **rotation[1]**: Three.jsのY軸回転 = `-theta`（符号が逆）
 - 理由: Three.js は左手座標系、数学的計算は右手座標系
 
 ## 基本データ構造
 
 ### Pose（姿勢）
+
 ```typescript
 interface Pose {
   point: Vec3;  // [x, y, z] 位置
@@ -32,6 +36,7 @@ interface Pose {
 ```
 
 ### Rail（レール）
+
 ```typescript
 interface Rail {
   position: Vec3;     // 3Dオブジェクトの配置座標（中心点）
@@ -75,6 +80,7 @@ const makeStraight = (pose: Pose, length = RAIL_STRAIGHT_FULL_LENGTH): Rail => {
 ```
 
 ### 重要ポイント
+
 1. **Z座標に-dirz**: Three.js座標系に合わせるため
 2. **position vs connections**: positionは表示用、connectionsは論理用
 3. **中点計算**: 3Dオブジェクトは中心に配置される
@@ -108,6 +114,7 @@ const makeSlope = (pose: Pose, ascending = true): Rail => {
 ```
 
 ### スロープの物理的意味
+
 - **RAIL_SLOPE_RUN**: 水平距離（例: 4.0）
 - **RAIL_SLOPE_RISE**: 垂直距離（例: 1.0）
 - **勾配**: rise/run = 1/4 = 25%
@@ -185,6 +192,7 @@ const makeLeftCurveSlope = (pose: Pose, ascending = true): Rail => {
 ```
 
 ### 重要な設計判断
+
 - **高度変化**: カーブ中心ではなく、開始点基準で計算
 - **理由**: 電車の走行時に自然な傾斜感を得るため
 
@@ -212,6 +220,7 @@ const poseFromRailEnd = (rail: Rail): Pose => {
 ```
 
 ### レール連続配置の仕組み
+
 1. 最初のレール: ユーザーのクリック位置・方向で配置
 2. 2本目以降: 前のレールの `poseFromRailEnd` を開始点として使用
 3. これにより自動的に連続したレールが配置される
@@ -246,6 +255,7 @@ const getRailRotationAtConnection = (rail: Rail, connectionType: "start" | "end"
 ```
 
 ### スナップ機能の意義
+
 - **問題**: 曲線レールでは橋脚の配置位置・角度が複雑
 - **解決**: 線路接続点を自動検出し、適切な位置・角度で配置
 - **結果**: ユーザーは大まかにクリックするだけで正確な橋脚配置
@@ -279,6 +289,7 @@ const canPlaceRail = (rail: Rail): boolean => {
 ```
 
 ### 三重チェックの理由
+
 1. **connections**: 論理的な線路の始点・終点
 2. **position**: 3Dオブジェクトの配置座標
 3. **EPSILON**: 浮動小数点誤差への対応
@@ -286,11 +297,13 @@ const canPlaceRail = (rail: Rail): boolean => {
 ## パフォーマンス考慮
 
 ### 橋脚候補生成の最適化
+
 - **問題**: マウス移動の度に重い計算が実行されていた
 - **解決**: `updatePierCandidates()` を分離し、必要時のみ実行
 - **タイミング**: レール変更時、ツール選択時、モード変更時のみ
 
 ### 重複除去
+
 ```typescript
 const SNAP_THRESHOLD = 0.1;
 const existing = candidates.find(c =>

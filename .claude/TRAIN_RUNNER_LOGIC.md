@@ -5,16 +5,19 @@
 ## 前提知識
 
 ### 電車の物理モデル
+
 - **3両編成**: 機関車 + 客車2両
 - **車両間隔**: `CAR_LENGTH`（例: 1.2）で固定
 - **連続運動**: 先頭車の位置から後続車を計算
 
 ### 時間とスピード
+
 - **requestAnimationFrame**: ブラウザの60FPS描画サイクルに同期
 - **deltaTime**: 前フレームからの経過時間（ミリ秒）
 - **speed**: ユーザー設定の速度倍率（0.5〜2.0）
 
 ### レール上の位置表現
+
 - **railIndex**: 現在走行中のレール番号
 - **segmentPosition**: そのレール内での進行度（0.0〜1.0）
 - **totalDistance**: 全レール通算での走行距離
@@ -22,6 +25,7 @@
 ## 基本データ構造
 
 ### TrainState（電車の状態）
+
 ```typescript
 interface TrainState {
   railIndex: number;          // 現在のレール番号
@@ -32,6 +36,7 @@ interface TrainState {
 ```
 
 ### CarTransform（車両の3D座標）
+
 ```typescript
 interface CarTransform {
   position: [number, number, number];  // 3D位置
@@ -68,6 +73,7 @@ const updateTrainPosition = (deltaTime: number) => {
 ```
 
 ### 設計の核心
+
 1. **時間ベース**: フレームレート非依存の滑らかな移動
 2. **距離ベース**: 総走行距離で全体位置を管理
 3. **連鎖計算**: 先頭→次位→最後尾の順で車両座標計算
@@ -104,6 +110,7 @@ const updateCurrentRailPosition = () => {
 ```
 
 ### レール長計算（segmentLength）
+
 ```typescript
 const segmentLength = (rail: Rail): number => {
   if (rail.type === "straight" || rail.type === "slope" || rail.type === "station") {
@@ -283,6 +290,7 @@ const updateCarTransforms = () => {
 ```
 
 ### 車両配置の論理
+
 1. **先頭車**: `totalDistance` の位置
 2. **2両目**: `totalDistance - CAR_LENGTH` の位置
 3. **3両目**: `totalDistance - (2 × CAR_LENGTH)` の位置
@@ -292,6 +300,7 @@ const updateCarTransforms = () => {
 ## スロープのease-in-out補間
 
 ### 物理的意味
+
 ```typescript
 // ease-in-out関数
 const easeInOut = (t: number): number => {
@@ -302,11 +311,13 @@ const easeInOut = (t: number): number => {
 ```
 
 ### なぜease-in-out？
+
 1. **リアルな動き**: 電車は坂道で徐々に加減速
 2. **滑らかな接続**: 前後のレールとの自然な繋がり
 3. **視覚的美しさ**: 機械的でない有機的な動き
 
 ### 接線ベクトルの計算
+
 ```typescript
 const getSlopeTangent = (rail: Rail, t: number): Vec3 => {
   const start = rail.connections.start;
@@ -330,6 +341,7 @@ const getSlopeTangent = (rail: Rail, t: number): Vec3 => {
 ## カメラ追従システム
 
 ### onTrainPoseコールバック
+
 ```typescript
 const registerTrainPoseCallback = (callback: (pos: Vec3, rot: Vec3) => void) => {
   onTrainPose = callback;
@@ -337,6 +349,7 @@ const registerTrainPoseCallback = (callback: (pos: Vec3, rot: Vec3) => void) => 
 ```
 
 ### 先頭カメラでの利用
+
 ```typescript
 // useCameraController.ts 内
 const handleTrainPose = (position: Vec3, rotation: Vec3) => {
@@ -356,11 +369,13 @@ const handleTrainPose = (position: Vec3, rotation: Vec3) => {
 ## パフォーマンス最適化
 
 ### 計算の分散
+
 1. **メインループ**: 60FPS で軽量な位置更新のみ
 2. **重い計算**: 必要時のみ実行（レール変更時など）
 3. **メモ化**: segmentLength などの結果をキャッシュ
 
 ### ガベージコレクション対策
+
 ```typescript
 // オブジェクト再利用
 const tempPose = { position: [0, 0, 0], rotation: [0, 0, 0] };
@@ -377,11 +392,13 @@ const updatePosition = () => {
 ## エラーハンドリング
 
 ### 境界条件
+
 - **レール不足**: 3本未満ではループしない
 - **距離オーバーフロー**: 総距離での除算で循環
 - **配列越境**: railIndex の範囲チェック
 
 ### デバッグサポート
+
 ```typescript
 const debugTrainState = () => ({
   rail: rails.value[trainState.railIndex]?.type,
