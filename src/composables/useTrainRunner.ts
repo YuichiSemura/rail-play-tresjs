@@ -193,11 +193,23 @@ export function useTrainRunner(
 
   // Emit for train pose updates (for camera following)
   const trainPoseCallbacks: Array<
-    (pose: { position: [number, number, number]; rotation: [number, number, number]; railType?: string; curveDirection?: string; secondCarPosition?: [number, number, number] }) => void
+    (pose: {
+      position: [number, number, number];
+      rotation: [number, number, number];
+      railType?: string;
+      curveDirection?: string;
+      secondCarPosition?: [number, number, number];
+    }) => void
   > = [];
 
   const onTrainPose = (
-    callback: (pose: { position: [number, number, number]; rotation: [number, number, number]; railType?: string; curveDirection?: string; secondCarPosition?: [number, number, number] }) => void
+    callback: (pose: {
+      position: [number, number, number];
+      rotation: [number, number, number];
+      railType?: string;
+      curveDirection?: string;
+      secondCarPosition?: [number, number, number];
+    }) => void
   ) => {
     trainPoseCallbacks.push(callback);
     return () => {
@@ -206,7 +218,13 @@ export function useTrainRunner(
     };
   };
 
-  const emitTrainPose = (pose: { position: [number, number, number]; rotation: [number, number, number]; railType?: string; curveDirection?: string; secondCarPosition?: [number, number, number] }) => {
+  const emitTrainPose = (pose: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    railType?: string;
+    curveDirection?: string;
+    secondCarPosition?: [number, number, number];
+  }) => {
     trainPoseCallbacks.forEach((callback) => callback(pose));
   };
 
@@ -279,7 +297,7 @@ export function useTrainRunner(
       position: lead.position,
       rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]],
       railType: currentRail?.type,
-      curveDirection: currentRail && 'direction' in currentRail ? currentRail.direction : undefined,
+      curveDirection: currentRail && "direction" in currentRail ? currentRail.direction : undefined,
       secondCarPosition,
     });
   };
@@ -291,11 +309,13 @@ export function useTrainRunner(
     return current + delta * t;
   };
 
-  // Animation loop
+  // Animation loop with performance optimizations
   const loop = () => {
+    // 電車停止時は計算スキップ
     if (running.value && canRun.value) {
       stepTrain();
     }
+
     animId = requestAnimationFrame(loop);
   };
 

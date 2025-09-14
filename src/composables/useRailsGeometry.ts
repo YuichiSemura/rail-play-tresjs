@@ -47,8 +47,7 @@ export function useRailsGeometry() {
    *
    * 【計算ロジック】
    * 1. 起点（pose.point）から指定された向き（pose.theta）に向かって直線を引く
-   * 2. Math.cos(theta) でX方向、-Math.sin(theta) でZ方向の成分を計算
-   *    （注意: Z軸は-sin を使うことで座標系の整合性を保つ）
+   * 2. Math.cos(theta) でX方向、Math.sin(theta) でZ方向の成分を計算
    * 3. 中点を position として保存（3Dオブジェクトの配置座標）
    */
   const makeStraight = (pose: Pose, length = RAIL_STRAIGHT_FULL_LENGTH): Rail => {

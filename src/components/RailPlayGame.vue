@@ -1515,13 +1515,12 @@ onUnmounted(() => {
 }
 
 .sidebar-card {
-  top: 64px; /* ナビゲーションバーの下に配置 */
   width: 100%;
   height: 100vh;
   max-height: 100vh;
   pointer-events: all; /* カード内はクリック有効 */
   padding: 8px;
-  background: rgba(255, 255, 255, 0.95); /* 半透明背景 */
+  background: rgba(255, 255, 255, 0.85); /* より透明な背景 */
   backdrop-filter: blur(2px); /* 背景ぼかし効果 */
 }
 </style>

@@ -6,6 +6,11 @@
         遊び方ガイド
       </v-card-title>
       <v-card-text>
+        <!-- アプリ名タイトル -->
+        <div class="text-h6 mb-4 d-flex align-center">
+          <v-icon class="mr-2" size="20">mdi-train</v-icon>
+          レールあそびアプリ
+        </div>
         <v-expansion-panels variant="accordion">
           <!-- 基本操作 -->
           <v-expansion-panel>
