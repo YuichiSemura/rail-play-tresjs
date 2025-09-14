@@ -47,10 +47,10 @@
             :last-pointer="lastPointer"
             :ghost-rail="ghostRail"
             :ghost-pier="ghostPier"
-            @createLargeCircle="createLargeCircle"
             @createOvalPreset="createOvalPreset"
             @createSCurvePreset="createSCurvePreset"
             @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
+            @loadCurveSlopePreset="loadCurveSlopePreset"
             @clearAllRails="clearAllRails"
             @handleSaveManual1="handleSaveManual1"
             @handleSaveManual2="handleSaveManual2"
@@ -81,17 +81,18 @@
           :camera-position="cameraPosition"
           :camera-rotation="cameraRotation"
           :camera-mode="cameraMode"
+          :follow-target="followTarget"
           :rails="rails"
           :trees="trees"
           :buildings="buildings"
           :piers="piers"
-          :piers-key="piersKey"
           :car-transforms="carTransforms"
           :train-customization="trainCustomization"
           :ghost-rail="ghostRail"
           :ghost-tree="ghostTree"
           :ghost-building="ghostBuilding"
           :ghost-pier="ghostPier"
+          :pier-candidates="pierCandidates"
           @canvas-click="onCanvasClick"
           @plane-click="onPlaneClick"
           @plane-pointer-move="onPlanePointerMove"
@@ -150,7 +151,6 @@ import HelpDialog from "./panels/HelpDialog.vue";
 // 共通定数
 import {
   CURVE_SEGMENT_ANGLE as CURVE_ANGLE,
-  RAIL_CURVE_RADIUS,
   RAIL_STRAIGHT_FULL_LENGTH,
   RAIL_STRAIGHT_HALF_LENGTH,
   RAIL_SLOPE_RUN,
@@ -168,12 +168,24 @@ interface TrainCustomization {
   bodyColor: string;
   roofColor: string;
   windowColor: string;
+  frontWindowColor: string; // 運転席前面窓色
   wheelColor: string;
 }
 
 const gameMode = ref<GameMode>("build");
 const selectedTool = ref<
-  "none" | "straight" | "curve" | "slope" | "tree" | "building" | "pier" | "station" | "crossing" | "rotate" | "delete"
+  | "none"
+  | "straight"
+  | "curve"
+  | "slope"
+  | "curve-slope-up"
+  | "curve-slope-down"
+  | "tree"
+  | "building"
+  | "pier"
+  | "station"
+  | "crossing"
+  | "delete"
 >("none");
 const rails = ref<Rail[]>([]);
 const trees = ref<{ position: [number, number, number]; rotation?: [number, number, number] }[]>([]);
@@ -184,7 +196,6 @@ const piers = ref<{ position: [number, number, number]; height?: number; rotatio
 const trainRunning = ref(false);
 // クリア時に列車コンポーネントを確実に破棄・再生成するためのキー
 const trainKey = ref(0);
-const piersKey = ref(0);
 const trainSpeed = ref(1.0);
 
 // 保存データ情報（リアクティブ）- 初期化は後で行う
@@ -212,6 +223,7 @@ const trainCustomization = ref<TrainCustomization>({
   bodyColor: "#2E86C1",
   roofColor: "#1B4F72",
   windowColor: "#85C1E9",
+  frontWindowColor: "#F7DC6F",
   wheelColor: "#2C2C2C",
 });
 
@@ -219,11 +231,16 @@ const trainCustomization = ref<TrainCustomization>({
 const helpDialog = ref(false);
 const isRailsLocked = ref(false);
 
+// クリックイベントの重複処理を防ぐためのデバウンス
+const lastClickTime = ref(0);
+const CLICK_DEBOUNCE_MS = 100;
+
 // カメラ制御（composable）
 const {
   cameraMode,
   cameraPosition,
   cameraRotation,
+  followTarget,
   toggleCameraMode,
   resetToOrbit,
   handleTrainPose,
@@ -233,8 +250,21 @@ const {
 } = useCameraController();
 
 // 幾何ロジック（切り出し）
-const { makeStraight, makeSlope, makeLeftCurve, makeRightCurve, makeStation, makeCrossing, poseFromRailEnd } =
-  useRailsGeometry();
+const {
+  makeStraight,
+  makeSlope,
+  makeLeftCurve,
+  makeRightCurve,
+  makeLeftCurveSlope,
+  makeRightCurveSlope,
+  makeStation,
+  makeCrossing,
+  poseFromRailEnd,
+  canPlaceSlope,
+  canPlaceRail,
+  generatePierCandidates,
+  findNearestPierCandidate,
+} = useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
   if (rails.value.length < 3) return false;
@@ -244,6 +274,7 @@ const isLoopComplete = (): boolean => {
 
   const distance = Math.sqrt(
     (firstRail.connections.start[0] - lastRail.connections.end[0]) ** 2 +
+      (firstRail.connections.start[1] - lastRail.connections.end[1]) ** 2 +
       (firstRail.connections.start[2] - lastRail.connections.end[2]) ** 2
   );
 
@@ -282,8 +313,11 @@ const snapToGridSize = (position: number, size: number): number => {
 };
 
 // 進行端点の姿勢は共通型を使用
-
-const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" | "station" | "crossing"): Rail => {
+const createRail = (
+  x: number,
+  z: number,
+  type: "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
+): Rail => {
   // 前のレール終端姿勢（なければ原点+X）
   let pose: Pose = { point: [0, 0, 0], theta: 0 };
   if (rails.value.length > 0) {
@@ -307,34 +341,73 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
     // 2本目以降はクリック位置に依存せず、末端の姿勢そのままに固定長で追加
     return makeStraight(pose, RAIL_STRAIGHT_FULL_LENGTH);
   } else if (type === "curve") {
-    // クリックが接線の左側か右側かで分岐
+    // 最初の一本の場合はplacementYawに基づいて左右を決定（ゴーストと統一）
+    if (rails.value.length === 0) {
+      const desired = getPlacementRotation();
+      const base = pose.theta;
+      const leftYaw = base + CURVE_ANGLE;
+      const rightYaw = base - CURVE_ANGLE;
+      const norm = (a: number) => {
+        let d = a;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        return d;
+      };
+      const dL = Math.abs(norm(desired - leftYaw));
+      const dR = Math.abs(norm(desired - rightYaw));
+      return dL <= dR ? makeLeftCurve(pose) : makeRightCurve(pose);
+    }
+
+    // 2本目以降はクリックが接線の左側か右側かで分岐
     const leftSide = (() => {
-      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const dir = { x: Math.cos(pose.theta), z: -Math.sin(pose.theta) };
       const vx = snapToGrid(x) - pose.point[0];
       const vz = snapToGrid(z) - pose.point[2];
       const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
-      return cross > 0; // 左側なら正
+      return cross <= 0; // 左側なら正
     })();
     return leftSide ? makeLeftCurve(pose) : makeRightCurve(pose);
   } else if (type === "slope") {
-    // slope（水平投影長=4、上り/下りはクリック位置で決定：前方=上り、後方=下り）
+    // slope（カメラ視点からの相対位置で上り/下りを決定）
     const sx = pose.point[0];
     const sz = pose.point[2];
     const tx = snapToGrid(x);
     const tz = snapToGrid(z);
+
+    let ascending = true; // デフォルトは上り
+
     if (rails.value.length === 0) {
       const dx0 = tx - sx;
       const dz0 = tz - sz;
       if (Math.hypot(dx0, dz0) > 1e-3) {
         pose.theta = Math.atan2(dz0, dx0);
       }
+      // 最初のスロープは常に上り
+      ascending = true;
+    } else {
+      // 2本目以降はカメラ位置から見た判定
+      const cameraX = cameraPosition.value[0];
+      const cameraZ = cameraPosition.value[2];
+
+      // カメラからレール開始点へのベクトル
+      const cameraToRailX = sx - cameraX;
+      const cameraToRailZ = sz - cameraZ;
+
+      // カメラからクリック位置へのベクトル
+      const cameraToClickX = tx - cameraX;
+      const cameraToClickZ = tz - cameraZ;
+
+      // カメラからの距離を比較
+      // クリック位置がレール開始点より遠い場合は上り、近い場合は下り
+      const railDistance = Math.hypot(cameraToRailX, cameraToRailZ);
+      const clickDistance = Math.hypot(cameraToClickX, cameraToClickZ);
+      ascending = clickDistance > railDistance;
     }
-    const dirx = Math.cos(pose.theta);
-    const dirz = Math.sin(pose.theta);
-    const vx = tx - sx;
-    const vz = tz - sz;
-    const dot = dirx * vx + dirz * vz; // 前方: dot>=0, 後方: dot<0
-    const ascending = dot >= 0;
+
+    // 地面より下がるかチェック、高さ制限チェック
+    if (!canPlaceSlope(pose, ascending)) {
+      throw new Error("スロープが地面より下がるか、高さ制限を超えるため配置できません");
+    }
     return makeSlope(pose, ascending);
   } else if (type === "station") {
     // 駅ホームレール（直線レールと同様の処理）
@@ -358,6 +431,40 @@ const createRail = (x: number, z: number, type: "straight" | "curve" | "slope" |
       return makeCrossing(pose, RAIL_STRAIGHT_FULL_LENGTH);
     }
     return makeCrossing(pose, RAIL_STRAIGHT_FULL_LENGTH);
+  } else if (type === "curve-slope-up") {
+    // curve-slope-up（マウス位置で左右判定、常に上り）
+    const tx = snapToGrid(x);
+    const tz = snapToGrid(z);
+
+    // 左右判定（curveと同じ）
+    const leftSide = (() => {
+      const dir = { x: Math.cos(pose.theta), z: -Math.sin(pose.theta) };
+      const vx = tx - pose.point[0];
+      const vz = tz - pose.point[2];
+      const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
+      return cross <= 0; // 左側なら正
+    })();
+
+    // 常に上り
+    const ascending = true;
+    return leftSide ? makeLeftCurveSlope(pose, ascending) : makeRightCurveSlope(pose, ascending);
+  } else if (type === "curve-slope-down") {
+    // curve-slope-down（マウス位置で左右判定、常に下り）
+    const tx = snapToGrid(x);
+    const tz = snapToGrid(z);
+
+    // 左右判定（curveと同じ）
+    const leftSide = (() => {
+      const dir = { x: Math.cos(pose.theta), z: -Math.sin(pose.theta) };
+      const vx = tx - pose.point[0];
+      const vz = tz - pose.point[2];
+      const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
+      return cross <= 0; // 左側なら正
+    })();
+
+    // 常に下り
+    const ascending = false;
+    return leftSide ? makeLeftCurveSlope(pose, ascending) : makeRightCurveSlope(pose, ascending);
   }
 
   // 何も該当しない場合のデフォルト（型安全性のため）
@@ -379,9 +486,11 @@ const {
   ghostTree,
   ghostBuilding,
   ghostPier,
+  pierCandidates,
   rotatePlacement,
   resetPlacementRotation,
   updateGhost,
+  updatePierCandidates,
   updatePointer,
   resetGhosts,
   getPlacementRotation,
@@ -409,11 +518,35 @@ const addBuildingAt = (x: number, z: number) => {
 };
 
 const addPierAt = (x: number, z: number) => {
-  const px = snapToGridSize(x, 1);
-  const pz = snapToGridSize(z, 1);
-  if (!piers.value.some((p) => Math.hypot(p.position[0] - px, p.position[2] - pz) < 0.1)) {
-    piers.value.push({ position: [px, 0, pz], height: 0.7, rotation: [0, getPlacementRotation(), 0] });
+  // スマートスナップを使用して最適な配置位置を検索
+  const candidates = generatePierCandidates(rails.value);
+  const clickPos: [number, number, number] = [x, 0, z];
+  const nearestCandidate = findNearestPierCandidate(clickPos, candidates);
+
+  if (!nearestCandidate) {
+    showNotification("橋脚を配置できる線路接続点が範囲内にありません", "warning");
+    return;
   }
+
+  // 重複チェック
+  const existing = piers.value.find(
+    (p) => Math.hypot(p.position[0] - nearestCandidate.position[0], p.position[2] - nearestCandidate.position[2]) < 0.1
+  );
+
+  if (existing) {
+    showNotification("この位置には既に橋脚が配置されています", "warning");
+    return;
+  }
+
+  // 橋脚を配置
+  const pierHeight = Math.max(0.7, nearestCandidate.railHeight);
+  piers.value.push({
+    position: nearestCandidate.position,
+    height: pierHeight,
+    rotation: [0, nearestCandidate.rotation, 0],
+  });
+
+  showNotification("橋脚を配置しました", "success");
 };
 
 const addStationAt = (x: number, z: number) => {
@@ -436,6 +569,13 @@ const onPlaneClick = (event: ClickEvent) => {
   if (gameMode.value !== "build") return; // ビルドモード以外では配置不可
   if (selectedTool.value === "none") return; // 何も選択していない場合は配置不可
 
+  // デバウンス処理：短時間内の重複クリックを防ぐ
+  const now = Date.now();
+  if (now - lastClickTime.value < CLICK_DEBOUNCE_MS) {
+    return;
+  }
+  lastClickTime.value = now;
+
   const intersect = event.intersections?.[0];
   const pointLike = intersect?.point ?? event.point;
   if (!pointLike) return;
@@ -444,7 +584,13 @@ const onPlaneClick = (event: ClickEvent) => {
   // クリックでも最終ポインタを更新（カーブのプレビューに必要）
   updatePointer(point.x, point.z);
 
-  if (selectedTool.value === "straight" || selectedTool.value === "curve" || selectedTool.value === "slope") {
+  if (
+    selectedTool.value === "straight" ||
+    selectedTool.value === "curve" ||
+    selectedTool.value === "slope" ||
+    selectedTool.value === "curve-slope-up" ||
+    selectedTool.value === "curve-slope-down"
+  ) {
     // 周回状態では新しい線路を配置できない
     if (isRailsLocked.value) {
       showNotification(
@@ -454,7 +600,24 @@ const onPlaneClick = (event: ClickEvent) => {
       return;
     }
 
-    let newRail = createRail(point.x, point.z, selectedTool.value);
+    let newRail: Rail;
+    try {
+      newRail = createRail(point.x, point.z, selectedTool.value);
+    } catch (error) {
+      if (error instanceof Error) {
+        showNotification(error.message, "warning");
+      } else {
+        showNotification("レールを配置できませんでした", "warning");
+      }
+      return;
+    }
+
+    // エリア内チェック
+    if (!canPlaceRail(newRail)) {
+      showNotification("レールがエリア外に出るため配置できません", "warning");
+      return;
+    }
+
     // 最初の一本は向き調整（R/Eの事前回転）を尊重
     if (rails.value.length === 0) {
       if (newRail.type === "straight" || newRail.type === "slope") {
@@ -510,7 +673,6 @@ const onPlaneClick = (event: ClickEvent) => {
       }
     }
     rails.value.push(newRail);
-    updateGhost();
     return;
   }
   if (selectedTool.value === "tree") {
@@ -557,7 +719,7 @@ const onPlaneClick = (event: ClickEvent) => {
     addStationAt(point.x, point.z);
     return;
   }
-  // rotate/delete は平面では何もしない
+  // delete 以外は平面では何もしない（rotate ツール削除済）
 };
 
 const onPlanePointerMove = (event: ClickEvent) => {
@@ -571,53 +733,7 @@ const onCanvasClick = () => {
   // Canvas level click handling if needed
 };
 
-const rotateRail = (rail: Rail) => {
-  // 90度回転させる
-  const newRotationY = rail.rotation[1] + Math.PI / 2;
-  rail.rotation = [rail.rotation[0], newRotationY, rail.rotation[2]];
-
-  // 接続点を再計算（インライン）
-  const [ix, iy, iz] = rail.position;
-  const [, iry] = rail.rotation;
-  if (rail.type === "straight") {
-    const len = RAIL_STRAIGHT_HALF_LENGTH;
-    const dirX = Math.cos(-iry);
-    const dirZ = Math.sin(-iry);
-    rail.connections = { start: [ix - dirX * len, iy, iz - dirZ * len], end: [ix + dirX * len, iy, iz + dirZ * len] };
-  } else if (rail.type === "slope") {
-    const len = RAIL_SLOPE_RUN / 2;
-    const dirX = Math.cos(-iry);
-    const dirZ = Math.sin(-iry);
-    const prevStartY = rail.connections.start[1];
-    const prevEndY = rail.connections.end[1];
-    rail.connections = {
-      start: [ix - dirX * len, prevStartY, iz - dirZ * len],
-      end: [ix + dirX * len, prevEndY, iz + dirZ * len],
-    };
-  } else {
-    const r = RAIL_CURVE_RADIUS;
-    const theta = iry;
-    if (rail.type === "curve" && (rail.direction || "left") === "left") {
-      // Left curve: start = C - n_left(theta), end = C - n_left(theta + Δ)
-      rail.connections = {
-        start: [ix + Math.sin(theta) * r, iy, iz - Math.cos(theta) * r],
-        end: [ix + Math.sin(theta + CURVE_ANGLE) * r, iy, iz - Math.cos(theta + CURVE_ANGLE) * r],
-      };
-    } else {
-      // Right curve: start = C - n_right(theta), end = C - n_right(theta - Δ)
-      rail.connections = {
-        start: [ix - Math.sin(theta) * r, iy, iz + Math.cos(theta) * r],
-        end: [ix - Math.sin(theta - CURVE_ANGLE) * r, iy, iz + Math.cos(theta - CURVE_ANGLE) * r],
-      };
-    }
-  }
-
-  // 周回状態をリセット（回転によって接続が変わる可能性があるため）
-  if (isRailsLocked.value) {
-    isRailsLocked.value = false;
-    gameMode.value = "build";
-  }
-};
+// rotateRail 機能削除
 
 const onRailClick = (rail: Rail) => {
   if (gameMode.value !== "build") return;
@@ -625,15 +741,18 @@ const onRailClick = (rail: Rail) => {
   if (selectedTool.value === "delete") {
     const index = rails.value.findIndex((r) => r.id === rail.id);
     if (index > -1) {
-      rails.value.splice(index, 1);
-      // 削除後にロック状態をリセット
-      if (isRailsLocked.value) {
-        isRailsLocked.value = false;
-        gameMode.value = "build"; // ビルドモードに戻す
+      // 先頭または最後のレールのみ削除可能
+      if (index === 0 || index === rails.value.length - 1) {
+        rails.value.splice(index, 1);
+        // 削除後にロック状態をリセット
+        if (isRailsLocked.value) {
+          isRailsLocked.value = false;
+          gameMode.value = "build"; // ビルドモードに戻す
+        }
+      } else {
+        showNotification("線路の削除は先頭または最後のレールのみ可能です", "warning");
       }
     }
-  } else if (selectedTool.value === "rotate") {
-    rotateRail(rail);
   }
 };
 
@@ -641,11 +760,6 @@ const onTreeClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     trees.value.splice(index, 1);
-  } else if (selectedTool.value === "rotate") {
-    const t = trees.value[index];
-    if (!t) return;
-    const rot = t.rotation ?? [0, 0, 0];
-    t.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -653,11 +767,6 @@ const onBuildingClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     buildings.value.splice(index, 1);
-  } else if (selectedTool.value === "rotate") {
-    const b = buildings.value[index];
-    if (!b) return;
-    const rot = b.rotation ?? [0, 0, 0];
-    b.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -665,13 +774,6 @@ const onPierClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
     piers.value.splice(index, 1);
-    // 削除後に強制再マウントでバグ回避
-    piersKey.value++;
-  } else if (selectedTool.value === "rotate") {
-    const p = piers.value[index];
-    if (!p) return;
-    const rot = p.rotation ?? [0, 0, 0];
-    p.rotation = [rot[0], rot[1] + Math.PI / 2, rot[2]];
   }
 };
 
@@ -684,18 +786,61 @@ const toggleGameMode = () => {
   }
 };
 
-const createLargeCircle = () => {
-  // 半径2 の 45° カーブ 8本で一周
-  rails.value = [];
-  const num = 8;
-  let pose: Pose = { point: [0, 0, 0], theta: 0 };
-  for (let i = 0; i < num; i++) {
-    const rail = makeLeftCurve(pose);
-    rails.value.push(rail);
-    pose = poseFromRailEnd(rail);
+// JSONファイルからプリセットデータをロードして線路を生成
+const loadCurveSlopePreset = async () => {
+  try {
+    // Viteでは静的JSONファイルは動的インポートで読み込む
+    const presetModule = await import("../data/curve_slope_preset.json");
+    const presetData = presetModule.default;
+
+    // 既存のレールをクリア
+    rails.value = [];
+    trees.value = [];
+    buildings.value = [];
+    piers.value = [];
+    isRailsLocked.value = false;
+    gameMode.value = "build";
+
+    // プリセットデータからレールを復元（型キャストして適用）
+    if (presetData.rails && Array.isArray(presetData.rails)) {
+      rails.value = presetData.rails as Rail[];
+    }
+    if (presetData.trees && Array.isArray(presetData.trees)) {
+      trees.value = presetData.trees as { position: [number, number, number]; rotation?: [number, number, number] }[];
+    }
+    if (presetData.buildings && Array.isArray(presetData.buildings)) {
+      buildings.value = presetData.buildings as {
+        position: [number, number, number];
+        height?: number;
+        color?: string;
+        rotation?: [number, number, number];
+      }[];
+    }
+    if (presetData.piers && Array.isArray(presetData.piers)) {
+      piers.value = presetData.piers as {
+        position: [number, number, number];
+        height?: number;
+        rotation?: [number, number, number];
+      }[];
+    }
+    if (presetData.isRailsLocked) {
+      isRailsLocked.value = presetData.isRailsLocked;
+    }
+    if (presetData.gameMode) {
+      gameMode.value = presetData.gameMode as GameMode;
+    }
+
+    // プレビューをリセット
+    resetGhosts();
+    resetToOrbit();
+    trainKey.value++;
+
+    const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+    showNotification(`曲線スローププリセットを読み込みました（${totalItems}個のオブジェクト）`, "success");
+  } catch (error) {
+    console.error("プリセット読み込みエラー:", error);
+    showNotification("プリセットの読み込みに失敗しました", "error");
   }
-  isRailsLocked.value = true;
-  gameMode.value = "run";
 };
 
 // 先頭カメラ視点 微調整ドラッグ
@@ -722,8 +867,6 @@ const clearAllRails = () => {
   resetGhosts();
   // 列車を確実に削除（アンマウント）させ、次回の生成は新インスタンスに
   trainKey.value++;
-  // 橋脚も強制再マウントでリソースをクリア
-  piersKey.value++;
   // 自由視点へ戻す
   resetToOrbit();
 };
@@ -768,9 +911,8 @@ const loadGameData = () => {
   gameMode.value = saveData.gameMode || "build";
   isRailsLocked.value = saveData.isRailsLocked || false;
 
-  // 列車と橋脚の強制再マウント
+  // 列車の強制再マウント
   trainKey.value++;
-  piersKey.value++;
 
   // ゴーストをクリア
   resetGhosts();
@@ -925,7 +1067,6 @@ const handleLoadManual1 = () => {
     currentTitle.value = saveData.title || "";
 
     trainKey.value++;
-    piersKey.value++;
     resetGhosts();
     resetToOrbit();
 
@@ -981,7 +1122,6 @@ const handleLoadManual2 = () => {
     currentTitle.value = saveData.title || "";
 
     trainKey.value++;
-    piersKey.value++;
     resetGhosts();
     resetToOrbit();
 
@@ -1023,6 +1163,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
         bodyColor: "#2E86C1",
         roofColor: "#1B4F72",
         windowColor: "#85C1E9",
+        frontWindowColor: "#F7DC6F",
         wheelColor: "#2C2C2C",
       };
       break;
@@ -1031,6 +1172,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
         bodyColor: "#E74C3C",
         roofColor: "#B71C1C",
         windowColor: "#FFCDD2",
+        frontWindowColor: "#FAD7A0",
         wheelColor: "#424242",
       };
       break;
@@ -1039,6 +1181,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
         bodyColor: "#27AE60",
         roofColor: "#1B5E20",
         windowColor: "#C8E6C9",
+        frontWindowColor: "#D5F5E3",
         wheelColor: "#2E2E2E",
       };
       break;
@@ -1230,9 +1373,21 @@ const createSlopeUpDownCurvesPreset = () => {
 };
 
 // ツールやモード変更、レール本数の変化でプレビューを更新
-watch(selectedTool, updateGhost);
-watch(gameMode, updateGhost);
-watch(() => rails.value.length, updateGhost);
+watch(selectedTool, () => {
+  updateGhost();
+  updatePierCandidates();
+});
+watch(gameMode, () => {
+  updateGhost();
+  updatePierCandidates();
+});
+watch(
+  () => rails.value.length,
+  () => {
+    updateGhost();
+    updatePierCandidates();
+  }
+);
 
 // 運転モード → 配置モードに切り替わったらカメラを自由視点へ戻す
 watch(gameMode, (mode, prev) => {

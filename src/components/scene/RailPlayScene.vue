@@ -8,6 +8,7 @@
     @pointerup="onPointerUp"
     @pointerleave="onPointerUp"
   >
+    <Sky />
     <!-- Main Camera (orbit / front 共用) -->
     <TresPerspectiveCamera
       ref="cameraRef"
@@ -16,8 +17,20 @@
       :fov="cameraMode === 'orbit' ? 50 : 70"
     />
 
-    <!-- Controls (orbit モード時のみ) -->
-    <OrbitControls v-if="cameraMode === 'orbit'" :maxPolarAngle="Math.PI / 2 - 0.002" />
+    <!-- Controls (orbit と follow モード時) -->
+    <OrbitControls
+      v-if="cameraMode === 'orbit' || cameraMode === 'follow'"
+      ref="orbitControlsRef"
+      :target="cameraMode === 'follow' ? followTarget : undefined"
+      :maxPolarAngle="Math.PI / 2 - 0.005"
+      :minDistance="3"
+      :maxDistance="cameraMode === 'follow' ? 6 : 70"
+      :minAzimuthAngle="-Infinity"
+      :maxAzimuthAngle="Infinity"
+      :minPolarAngle="0"
+      :enablePan="true"
+      @change="restrictCameraTarget"
+    />
 
     <!-- Lights -->
     <TresAmbientLight :intensity="0.5" />
@@ -60,52 +73,27 @@
       <TresMeshStandardMaterial color="#FFD700" />
     </TresMesh>
 
-    <!-- 壁（方角表示用） -->
-    <!-- 北の壁（白系） -->
-    <TresMesh :position="[0, 5, -25]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#F5F5F5" :side="2" />
-    </TresMesh>
-
-    <!-- 南の壁（白系） -->
-    <TresMesh :position="[0, 5, 25]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#FAFAFA" :side="2" />
-    </TresMesh>
-
-    <!-- 東の壁（白系） -->
-    <TresMesh :position="[25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#F7F7F7" :side="2" />
-    </TresMesh>
-
-    <!-- 西の壁（白系） -->
-    <TresMesh :position="[-25, 5, 0]" :rotation="[0, Math.PI / 2, 0]">
-      <TresPlaneGeometry :args="[50, 10]" />
-      <TresMeshLambertMaterial color="#FFFFFF" :side="2" />
-    </TresMesh>
-
     <!-- Rails -->
-    <RailPlayRail v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
+    <RailSegment v-for="rail in rails" :key="rail.id" :rail="rail" @click="onRailClick" />
 
-    <!-- Station platforms are now rendered inside RailPlayRail component -->
+    <!-- Station platforms are rendered inside RailSegment component -->
 
     <!-- Train -->
-    <RailPlayTrain :cars="carTransforms" :customization="trainCustomization" />
+    <Train :cars="carTransforms" :customization="trainCustomization" />
 
     <!-- Trees -->
-    <RailPlayTree
+    <SceneryTree
       v-for="(t, i) in trees"
-      :key="'tree-' + i"
+      :key="`tree-${i}-${t.position[0]}-${t.position[2]}`"
       :position="t.position"
       :rotation="t.rotation"
       @click="onTreeClick(i)"
     />
 
     <!-- Buildings -->
-    <RailPlayBuilding
+    <SceneryBuilding
       v-for="(b, i) in buildings"
-      :key="'bld-' + i"
+      :key="`building-${i}-${b.position[0]}-${b.position[2]}-${b.color}`"
       :position="b.position"
       :height="b.height"
       :color="b.color"
@@ -114,9 +102,9 @@
     />
 
     <!-- Piers -->
-    <RailPlayPier
+    <SceneryPier
       v-for="(p, i) in piers"
-      :key="`pier-${piersKey}-${i}`"
+      :key="`pier-${i}-${p.position[0]}-${p.position[2]}`"
       :position="p.position"
       :height="p.height"
       :rotation="p.rotation"
@@ -124,11 +112,11 @@
     />
 
     <!-- Ghost rail preview -->
-    <RailPlayRail v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
+    <RailSegment v-if="ghostRail" :key="`ghost-${ghostRail.id}`" :rail="ghostRail" :ghost="true" />
 
     <!-- Ghost tree/building preview -->
-    <RailPlayTree v-if="ghostTree" :position="ghostTree.position" :rotation="ghostTree.rotation" :ghost="true" />
-    <RailPlayBuilding
+    <SceneryTree v-if="ghostTree" :position="ghostTree.position" :rotation="ghostTree.rotation" :ghost="true" />
+    <SceneryBuilding
       v-if="ghostBuilding"
       :position="ghostBuilding.position"
       :height="ghostBuilding.height"
@@ -138,7 +126,7 @@
     />
 
     <!-- Ghost pier preview -->
-    <RailPlayPier
+    <SceneryPier
       v-if="ghostPier"
       :position="ghostPier.position"
       :height="ghostPier.height"
@@ -146,19 +134,29 @@
       :ghost="true"
     />
 
-    <!-- Ghost station preview is now rendered inside RailPlayRail component -->
+    <!-- Pier candidates preview (semi-transparent) -->
+    <SceneryPier
+      v-for="(candidate, i) in pierCandidates"
+      :key="`pier-candidate-${i}`"
+      :position="candidate.position"
+      :height="candidate.height"
+      :rotation="candidate.rotation"
+      :candidate="true"
+    />
+
+    <!-- Ghost station preview is rendered inside RailSegment component -->
   </TresCanvas>
 </template>
 
 <script setup lang="ts">
 import { TresCanvas } from "@tresjs/core";
 import { shallowRef, onMounted } from "vue";
-import { OrbitControls } from "@tresjs/cientos";
-import RailPlayRail from "../RailPlayRail.vue";
-import RailPlayTrain from "../RailPlayTrain.vue";
-import RailPlayTree from "../RailPlayTree.vue";
-import RailPlayBuilding from "../RailPlayBuilding.vue";
-import RailPlayPier from "../RailPlayPier.vue";
+import { OrbitControls, Sky } from "@tresjs/cientos";
+import RailSegment from "../rail/RailSegment.vue";
+import Train from "../train/Train.vue";
+import SceneryTree from "../scenery/SceneryTree.vue";
+import SceneryBuilding from "../scenery/SceneryBuilding.vue";
+import SceneryPier from "../scenery/SceneryPier.vue";
 import type { Rail } from "../../types/rail";
 
 interface ClickEvent {
@@ -174,7 +172,8 @@ interface Props {
   // カメラ関連
   cameraPosition: [number, number, number];
   cameraRotation: [number, number, number];
-  cameraMode: "orbit" | "front";
+  cameraMode: "orbit" | "front" | "follow";
+  followTarget: [number, number, number];
 
   // ゲームオブジェクト
   rails: Rail[];
@@ -186,7 +185,6 @@ interface Props {
     rotation?: [number, number, number];
   }[];
   piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
-  piersKey: number;
 
   // 列車関連
   carTransforms: { position: [number, number, number]; rotation: [number, number, number] }[];
@@ -194,6 +192,7 @@ interface Props {
     bodyColor: string;
     roofColor: string;
     windowColor: string;
+    frontWindowColor: string;
     wheelColor: string;
   };
 
@@ -207,7 +206,14 @@ interface Props {
     rotation?: [number, number, number];
   } | null;
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
+  pierCandidates: Array<{
+    position: [number, number, number];
+    height: number;
+    rotation: [number, number, number];
+  }>;
 }
+
+import { AREA_LIMIT } from "../../constants/area";
 
 const props = defineProps<Props>();
 const cameraRef = shallowRef<any>(null);
@@ -281,6 +287,17 @@ onMounted(() => {
     cam.rotation.order = "YXZ";
   }
 });
+
+const restrictCameraTarget = (controls: any) => {
+  // Y方向の移動を禁止（Y=0に固定）
+  if (controls.target.y !== 0) {
+    controls.target.y = 0;
+  }
+
+  // X/Z方向をエリア内に制限
+  controls.target.x = Math.max(-AREA_LIMIT * 0.8, Math.min(AREA_LIMIT * 0.8, controls.target.x));
+  controls.target.z = Math.max(-AREA_LIMIT * 0.8, Math.min(AREA_LIMIT * 0.8, controls.target.z));
+};
 
 const onBuildingClick = (index: number) => {
   emit("buildingClick", index);

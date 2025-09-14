@@ -277,7 +277,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { RAIL_STRAIGHT_HALF_LENGTH } from "../constants/rail";
+import { RAIL_STRAIGHT_HALF_LENGTH } from "../../constants/rail";
 
 const props = withDefaults(
   defineProps<{

@@ -5,11 +5,13 @@
     </v-btn>
 
     <v-btn color="secondary" :disabled="!canRunTrain" @click="$emit('toggleCameraMode')" block class="mb-3">
-      <v-icon class="mr-1">{{ cameraMode === "orbit" ? "mdi-train" : "mdi-orbit" }}</v-icon>
-      {{ cameraMode === "orbit" ? "先頭カメラ" : "自由視点" }}
+      <v-icon class="mr-1">{{
+        cameraMode === "orbit" ? "mdi-train" : cameraMode === "front" ? "mdi-camera-enhance" : "mdi-orbit"
+      }}</v-icon>
+      {{ cameraMode === "orbit" ? "先頭カメラ" : cameraMode === "front" ? "車両注視" : "自由視点" }}
     </v-btn>
 
-    <v-slider v-model="trainSpeedProxy" :min="0.1" :max="2.0" :step="0.1" label="速度" />
+    <v-slider v-model="trainSpeedProxy" :min="0.1" :max="8.0" :step="0.1" label="速度" />
   </v-card-text>
 </template>
 
@@ -19,7 +21,7 @@ interface Props {
   canRunTrain: boolean;
   trainRunning: boolean;
   trainSpeed: number;
-  cameraMode: "orbit" | "front";
+  cameraMode: "orbit" | "front" | "follow";
 }
 
 const props = defineProps<Props>();

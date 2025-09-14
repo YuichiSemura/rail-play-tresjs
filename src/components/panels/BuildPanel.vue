@@ -47,6 +47,28 @@
           スロープ
         </v-btn>
       </v-item>
+      <v-item value="curve-slope-up" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-chart-timeline-variant</v-icon>
+          曲線スロープ（上り）
+        </v-btn>
+      </v-item>
+      <v-item value="curve-slope-down" v-slot="{ isSelected, toggle }">
+        <v-btn
+          :color="isSelected ? 'primary' : undefined"
+          :variant="isSelected ? 'elevated' : 'outlined'"
+          @click="toggle"
+          :disabled="isRailsLocked"
+        >
+          <v-icon>mdi-chart-timeline-variant-reverse</v-icon>
+          曲線スロープ（下り）
+        </v-btn>
+      </v-item>
       <v-item value="crossing" v-slot="{ isSelected, toggle }">
         <v-btn
           :color="isSelected ? 'primary' : undefined"
@@ -99,16 +121,6 @@
           橋脚
         </v-btn>
       </v-item>
-      <v-item value="rotate" v-slot="{ isSelected, toggle }">
-        <v-btn
-          :color="isSelected ? 'primary' : undefined"
-          :variant="isSelected ? 'elevated' : 'outlined'"
-          @click="toggle"
-        >
-          <v-icon>mdi-rotate-3d-variant</v-icon>
-          回転
-        </v-btn>
-      </v-item>
       <v-item value="delete" v-slot="{ isSelected, toggle }">
         <v-btn
           :color="isSelected ? 'primary' : undefined"
@@ -121,9 +133,7 @@
       </v-item>
     </v-item-group>
 
-    <div v-if="selectedTool === 'rotate'" class="mt-3">
-      <v-alert type="info"> 回転したいレールをクリックしてください </v-alert>
-    </div>
+    <!-- rotate ツール削除 -->
 
     <v-divider class="my-4" />
 
@@ -148,12 +158,6 @@
     <v-card-subtitle>プリセット線路</v-card-subtitle>
     <v-row dense class="pa-2">
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('createLargeCircle')" :disabled="rails.length > 0" block class="mb-2">
-          <v-icon size="small">mdi-circle-outline</v-icon>
-          <span class="text-caption">大きな円</span>
-        </v-btn>
-      </v-col>
-      <v-col cols="6">
         <v-btn color="secondary" @click="$emit('createOvalPreset')" :disabled="rails.length > 0" block class="mb-2">
           <v-icon size="small">mdi-ellipse-outline</v-icon>
           <span class="text-caption">オーバル</span>
@@ -175,6 +179,12 @@
         >
           <v-icon size="small">mdi-trending-up</v-icon>
           <span class="text-caption">スロープ</span>
+        </v-btn>
+      </v-col>
+      <v-col cols="6">
+        <v-btn color="secondary" @click="$emit('loadCurveSlopePreset')" :disabled="rails.length > 0" block class="mb-2">
+          <v-icon size="small">mdi-file-document-outline</v-icon>
+          <span class="text-caption">曲線スロープ</span>
         </v-btn>
       </v-col>
       <v-col cols="12">
@@ -279,7 +289,9 @@
                 <template v-if="ghostRail">
                   <div>
                     Type: {{ ghostRail.type }}
-                    {{ ghostRail.type === "curve" ? `(${ghostRail.direction})` : "" }}
+                    {{
+                      ghostRail.type === "curve" || ghostRail.type === "curve-slope" ? `(${ghostRail.direction})` : ""
+                    }}
                   </div>
                   <div>
                     Position: [
@@ -336,7 +348,10 @@
               <div>
                 <strong>Rail {{ index }}:</strong>
               </div>
-              <div>Type: {{ rail.type }}</div>
+              <div>
+                Type: {{ rail.type
+                }}{{ rail.type === "curve" || rail.type === "curve-slope" ? ` (${rail.direction})` : "" }}
+              </div>
               <div>
                 Position: [{{ rail.position[0].toFixed(2) }}, {{ rail.position[1].toFixed(2) }},
                 {{ rail.position[2].toFixed(2) }}]
@@ -399,12 +414,13 @@ interface Props {
     | "straight"
     | "curve"
     | "slope"
+    | "curve-slope-up"
+    | "curve-slope-down"
     | "tree"
     | "building"
     | "pier"
     | "station"
     | "crossing"
-    | "rotate"
     | "delete";
   currentTitle: string;
   rails: Rail[];
@@ -436,19 +452,20 @@ const emit = defineEmits<{
       | "straight"
       | "curve"
       | "slope"
+      | "curve-slope-up"
+      | "curve-slope-down"
       | "tree"
       | "building"
       | "pier"
       | "station"
       | "crossing"
-      | "rotate"
       | "delete"
   ];
   "update:currentTitle": [value: string];
-  createLargeCircle: [];
   createOvalPreset: [];
   createSCurvePreset: [];
   createSlopeUpDownCurvesPreset: [];
+  loadCurveSlopePreset: [];
   clearAllRails: [];
   handleSaveManual1: [];
   handleSaveManual2: [];
@@ -465,12 +482,13 @@ const selectedToolProxy = computed({
       | "straight"
       | "curve"
       | "slope"
+      | "curve-slope-up"
+      | "curve-slope-down"
       | "tree"
       | "building"
       | "pier"
       | "station"
       | "crossing"
-      | "rotate"
       | "delete"
   ) => emit("update:selectedTool", v),
 });
@@ -486,7 +504,7 @@ watch(
   () => props.isRailsLocked,
   (isLocked) => {
     if (isLocked) {
-      const railTools = ["straight", "curve", "slope", "station", "crossing"];
+      const railTools = ["straight", "curve", "slope", "curve-slope-up", "curve-slope-down", "station", "crossing"];
       if (railTools.includes(props.selectedTool)) {
         emit("update:selectedTool", "tree");
       }

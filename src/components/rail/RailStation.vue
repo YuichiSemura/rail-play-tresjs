@@ -6,7 +6,7 @@
     @pointerdown="!ghost && $emit('click')"
     :render-order="ghost ? 1 : 0"
   >
-    <!-- レール部分は RailPlayRail.vue で描画されるため、ここでは描画しない -->
+    <!-- レール部分は rail/RailSegment.vue で描画されるため、ここでは描画しない -->
 
     <TresGroup :position="[0, 0, 0]" :rotation="[0, Math.PI / 2, 0]">
       <!-- 左側のホーム -->
@@ -73,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { RAIL_STRAIGHT_FULL_LENGTH } from "../constants/rail";
+import { RAIL_STRAIGHT_FULL_LENGTH } from "../../constants/rail";
 
 defineEmits<{ (e: "click"): void }>();
 const props = defineProps<{

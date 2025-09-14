@@ -3,15 +3,13 @@
     :position="position"
     :rotation="rotation"
     :scale="scale"
-    @pointerdown="!ghost && $emit('click')"
+    @click="!ghost && $emit('click')"
     :render-order="ghost ? 1 : 0"
   >
-    <!-- trunk -->
     <TresMesh :position="[0, trunkHeight / 2, 0]">
       <TresCylinderGeometry :args="[trunkRadius, trunkRadius, trunkHeight, 8]" />
       <TresMeshLambertMaterial color="#8B5A2B" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
     </TresMesh>
-    <!-- foliage -->
     <TresMesh :position="[0, trunkHeight + foliageRadius * 0.9, 0]">
       <TresSphereGeometry :args="[foliageRadius, 12, 12]" />
       <TresMeshLambertMaterial color="#2E8B57" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />

@@ -29,11 +29,25 @@
               レール配置
             </v-expansion-panel-title>
             <v-expansion-panel-text>
+              <h4 class="mb-2">基本レール</h4>
+              <ul class="mb-3">
+                <li><strong>直線レール:</strong> まっすぐなレールを配置</li>
+                <li><strong>カーブレール:</strong> 左右90°のカーブレールを配置</li>
+                <li><strong>スロープ:</strong> 上り・下りの坂道レールを配置</li>
+              </ul>
+              <h4 class="mb-2">高度なレール</h4>
+              <ul class="mb-3">
+                <li><strong>曲線スロープ（上り）:</strong> カーブしながら上るレール</li>
+                <li><strong>曲線スロープ（下り）:</strong> カーブしながら下るレール</li>
+                <li><strong>駅ホーム:</strong> 駅の機能を持つ直線レール</li>
+                <li><strong>踏切:</strong> 道路との交差点を表現するレール</li>
+              </ul>
+              <h4 class="mb-2">配置のルール</h4>
               <ul>
-                <li><strong>直線レール:</strong> クリックして配置。もう一度クリックで削除</li>
-                <li><strong>カーブレール:</strong> 左右のカーブが選択できます</li>
-                <li><strong>坂レール:</strong> 高低差のあるレールを作成できます</li>
-                <li><strong>接続:</strong> レール同士は自動的に接続されます</li>
+                <li>最初のレールのみクリック位置と向きで配置</li>
+                <li>2本目以降は前のレールの終端に自動接続</li>
+                <li>床下や制限高度を超える場所には配置不可</li>
+                <li>周回が完成すると自動で運転モードに切り替わり</li>
               </ul>
             </v-expansion-panel-text>
           </v-expansion-panel>
@@ -64,26 +78,56 @@
               建物・装飾
             </v-expansion-panel-title>
             <v-expansion-panel-text>
+              <h4 class="mb-2">景観アイテム</h4>
+              <ul class="mb-3">
+                <li><strong>建物:</strong> 街並みを作るためのビルを配置（ランダムな高さ・色）</li>
+                <li><strong>木:</strong> 自然な風景を作るための樹木を配置</li>
+              </ul>
+              <h4 class="mb-2">橋脚（スマートスナップ機能）</h4>
+              <ul class="mb-3">
+                <li><strong>自動候補表示:</strong> 橋脚ツール選択時、配置可能な位置が半透明で表示</li>
+                <li><strong>スマートスナップ:</strong> クリック位置に最も近い線路接続点に自動配置</li>
+                <li><strong>正確な角度:</strong> 曲線スロープでも線路に垂直な正しい角度で配置</li>
+                <li><strong>高さ自動調整:</strong> 線路の高さに応じて橋脚の高さを自動設定</li>
+              </ul>
+              <h4 class="mb-2">操作方法</h4>
               <ul>
-                <li><strong>建物:</strong> 街並みを作るためのビルを配置できます</li>
-                <li><strong>木:</strong> 自然な風景を作るための樹木を配置できます</li>
-                <li><strong>橋脚:</strong> 高架レールをサポートする支柱を配置できます</li>
-                <li><strong>配置・削除:</strong> クリックで配置、もう一度クリックで削除</li>
+                <li>クリックで配置、配置済みアイテムをクリックで削除</li>
+                <li>配置方向の回転は R/E キーで行えます（レール初回配置や装飾の向き調整）。</li>
               </ul>
             </v-expansion-panel-text>
           </v-expansion-panel>
 
-          <!-- 電車の操作 -->
+          <!-- 電車・カメラ操作 -->
           <v-expansion-panel>
             <v-expansion-panel-title>
               <v-icon class="mr-2">mdi-train</v-icon>
-              電車の操作
+              電車・カメラ操作
             </v-expansion-panel-title>
             <v-expansion-panel-text>
+              <h4 class="mb-2">運転モード</h4>
+              <ul class="mb-3">
+                <li><strong>自動運転:</strong> 周回コース完成時に自動でモード切替、電車が走行開始</li>
+                <li><strong>速度調整:</strong> スライダーで電車の速度を0.1倍〜8.0倍に調整</li>
+                <li><strong>3両編成:</strong> 機関車＋客車2両の編成で走行</li>
+                <li><strong>スロープ走行:</strong> 坂道では滑らかな高度変化で走行</li>
+              </ul>
+              <h4 class="mb-2">カメラモード</h4>
+              <ul class="mb-3">
+                <li><strong>自由視点（Orbit）:</strong> マウスで自由に視点を回転・移動</li>
+                <li><strong>先頭カメラ（Front）:</strong> 電車の先頭に追従、ドラッグで視線微調整</li>
+                <li><strong>車両注視（Follow）:</strong> 2両目を中心に注視、OrbitControlsで自由な角度から電車を観察</li>
+              </ul>
+              <h4 class="mb-2">カメラモードの特徴</h4>
+              <ul class="mb-3">
+                <li><strong>自由視点:</strong> 固定視点から全体を俯瞰、レール配置の確認に最適</li>
+                <li><strong>先頭カメラ:</strong> 運転士視点で臨場感ある体験、カーブでは自動的に内側を向く</li>
+                <li><strong>車両注視:</strong> 電車を外部から動的に観察、迫力あるアングルで運行を楽しめる</li>
+              </ul>
+              <h4 class="mb-2">電車カスタマイズモード</h4>
               <ul>
-                <li><strong>自動運転:</strong> 配置されたレール上を電車が自動で走行します</li>
-                <li><strong>カスタマイズ:</strong> ホーム画面から電車の色を変更できます</li>
-                <li><strong>連結:</strong> 3両編成の電車が表示されます</li>
+                <li><strong>色変更:</strong> 車体・屋根・窓・車輪の色をそれぞれ調整</li>
+                <li><strong>プリセット:</strong> デフォルト・赤・緑の定番カラーリング</li>
               </ul>
             </v-expansion-panel-text>
           </v-expansion-panel>
@@ -92,14 +136,16 @@
           <v-expansion-panel>
             <v-expansion-panel-title>
               <v-icon class="mr-2">mdi-palette</v-icon>
-              プリセット
+              プリセットレイアウト
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <ul>
-                <li><strong>基本レイアウト:</strong> 楕円形の基本的なレール配置</li>
-                <li><strong>複雑レイアウト:</strong> カーブと直線を組み合わせた複雑な配置</li>
-                <li><strong>坂道レイアウト:</strong> 高低差のある立体的な配置</li>
+                <li><strong>オーバル:</strong> 直線＋左カーブで構成される楕円形コース</li>
+                <li><strong>S字:</strong> 左右カーブを組み合わせた複雑な周回コース（景観付き）</li>
+                <li><strong>スロープ:</strong> 上り・下りスロープと駅・踏切を含む立体コース</li>
+                <li><strong>曲線スロープ:</strong> 曲線スロープを含む高度な3D立体レイアウト</li>
               </ul>
+              <p class="text-medium-emphasis mt-2">※ プリセット選択時は既存のレール・建物がすべて削除されます</p>
             </v-expansion-panel-text>
           </v-expansion-panel>
 
@@ -110,10 +156,22 @@
               データ管理
             </v-expansion-panel-title>
             <v-expansion-panel-text>
+              <h4 class="mb-2">自動保存</h4>
+              <ul class="mb-3">
+                <li><strong>自動保存:</strong> レール・建物の変更を1.5秒後に自動保存</li>
+                <li><strong>ページ読み込み時:</strong> 前回のデータを自動で復元</li>
+              </ul>
+              <h4 class="mb-2">手動保存（2スロット対応）</h4>
+              <ul class="mb-3">
+                <li><strong>保存1/保存2:</strong> 異なるレイアウトを2つまで手動保存</li>
+                <li><strong>保存情報表示:</strong> 保存日時、タイトル、アイテム数を確認可能</li>
+                <li><strong>上書き確認:</strong> 既存データがある場合は確認ダイアログで安全に保存</li>
+              </ul>
+              <h4 class="mb-2">データの安全性</h4>
               <ul>
-                <li><strong>保存:</strong> 現在のレイアウトをブラウザに保存できます</li>
-                <li><strong>復元:</strong> 保存したレイアウトを読み込むことができます</li>
-                <li><strong>自動保存:</strong> データはローカルストレージに自動的に保存されます</li>
+                <li>すべてのデータはブラウザのローカルストレージに保存</li>
+                <li>外部サーバーへの送信は一切なし、プライバシー安全</li>
+                <li>ブラウザのデータ削除時のみデータが失われます</li>
               </ul>
             </v-expansion-panel-text>
           </v-expansion-panel>

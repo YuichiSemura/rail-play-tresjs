@@ -3,15 +3,13 @@
     :position="position"
     :rotation="rotation"
     :scale="scale"
-    @pointerdown="!ghost && $emit('click')"
+    @click="!ghost && $emit('click')"
     :render-order="ghost ? 1 : 0"
   >
-    <!-- base building block (lifted by height/2 so it sits on the ground) -->
     <TresMesh :position="[0, height / 2, 0]">
       <TresBoxGeometry :args="[width, height, depth]" />
       <TresMeshLambertMaterial :color="color" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
     </TresMesh>
-    <!-- simple roof accent (on top of the building) -->
     <TresMesh :position="[0, height + 0.05, 0]">
       <TresBoxGeometry :args="[width * 1.02, 0.1, depth * 1.02]" />
       <TresMeshLambertMaterial color="#CCCCCC" :transparent="ghost" :opacity="ghost ? 0.25 : 1" />
