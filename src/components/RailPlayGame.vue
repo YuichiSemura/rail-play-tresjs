@@ -91,6 +91,7 @@
           :ghost-tree="ghostTree"
           :ghost-building="ghostBuilding"
           :ghost-pier="ghostPier"
+          :pier-candidates="pierCandidates"
           @canvas-click="onCanvasClick"
           @plane-click="onPlaneClick"
           @plane-pointer-move="onPlanePointerMove"
@@ -259,7 +260,8 @@ const {
   poseFromRailEnd,
   canPlaceSlope,
   canPlaceRail,
-  canPlacePier,
+  generatePierCandidates,
+  findNearestPierCandidate,
 } = useRailsGeometry();
 
 const isLoopComplete = (): boolean => {
@@ -359,11 +361,11 @@ const createRail = (
 
     // 2本目以降はクリックが接線の左側か右側かで分岐
     const leftSide = (() => {
-      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const dir = { x: Math.cos(pose.theta), z: -Math.sin(pose.theta) };
       const vx = snapToGrid(x) - pose.point[0];
       const vz = snapToGrid(z) - pose.point[2];
       const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
-      return cross > 0; // 左側なら正
+      return cross <= 0; // 左側なら正
     })();
     return leftSide ? makeLeftCurve(pose) : makeRightCurve(pose);
   } else if (type === "slope") {
@@ -407,7 +409,7 @@ const createRail = (
     if (!canPlaceSlope(pose, ascending)) {
       throw new Error("スロープが地面より下がるか、高さ制限を超えるため配置できません");
     }
-
+    console.log("pose for slope:", pose, "ascending:", ascending);
     return makeSlope(pose, ascending);
   } else if (type === "station") {
     // 駅ホームレール（直線レールと同様の処理）
@@ -438,11 +440,11 @@ const createRail = (
 
     // 左右判定（curveと同じ）
     const leftSide = (() => {
-      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const dir = { x: Math.cos(pose.theta), z: -Math.sin(pose.theta) };
       const vx = tx - pose.point[0];
       const vz = tz - pose.point[2];
       const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
-      return cross > 0; // 左側なら正
+      return cross <= 0; // 左側なら正
     })();
 
     // 常に上り
@@ -455,11 +457,11 @@ const createRail = (
 
     // 左右判定（curveと同じ）
     const leftSide = (() => {
-      const dir = { x: Math.cos(pose.theta), z: Math.sin(pose.theta) };
+      const dir = { x: Math.cos(pose.theta), z: -Math.sin(pose.theta) };
       const vx = tx - pose.point[0];
       const vz = tz - pose.point[2];
       const cross = dir.x * vz - dir.z * vx; // 2D cross: (dir x v)
-      return cross > 0; // 左側なら正
+      return cross <= 0; // 左側なら正
     })();
 
     // 常に下り
@@ -486,9 +488,11 @@ const {
   ghostTree,
   ghostBuilding,
   ghostPier,
+  pierCandidates,
   rotatePlacement,
   resetPlacementRotation,
   updateGhost,
+  updatePierCandidates,
   updatePointer,
   resetGhosts,
   getPlacementRotation,
@@ -516,36 +520,35 @@ const addBuildingAt = (x: number, z: number) => {
 };
 
 const addPierAt = (x: number, z: number) => {
-  const px = snapToGridSize(x, 1);
-  const pz = snapToGridSize(z, 1);
+  // スマートスナップを使用して最適な配置位置を検索
+  const candidates = generatePierCandidates(rails.value);
+  const clickPos: [number, number, number] = [x, 0, z];
+  const nearestCandidate = findNearestPierCandidate(clickPos, candidates);
 
-  // 配置可能かチェック（仮の位置で）
-  const tempPosition: [number, number, number] = [px, 0, pz];
-  const placementResult = canPlacePier(tempPosition, rails.value);
-
-  if (!placementResult.canPlace) {
-    showNotification(placementResult.error || "橋脚を配置できません", "warning");
+  if (!nearestCandidate) {
+    showNotification("橋脚を配置できる線路接続点が範囲内にありません", "warning");
     return;
   }
 
-  // 正しい位置と設定を取得
-  const correctPosition = placementResult.correctPosition || [px, 0, pz];
-  const railHeight = placementResult.railHeight || 0;
-  const pierRotation = placementResult.rotation || 0;
-
   // 重複チェック
-  if (
-    !piers.value.some((p) => Math.hypot(p.position[0] - correctPosition[0], p.position[2] - correctPosition[2]) < 0.1)
-  ) {
-    // 橋脚の高さは線路の高さに合わせる（線路を支えるため）
-    const pierHeight = Math.max(0.7, railHeight);
+  const existing = piers.value.find(
+    (p) => Math.hypot(p.position[0] - nearestCandidate.position[0], p.position[2] - nearestCandidate.position[2]) < 0.1
+  );
 
-    piers.value.push({
-      position: correctPosition as [number, number, number],
-      height: pierHeight,
-      rotation: [0, pierRotation, 0],
-    });
+  if (existing) {
+    showNotification("この位置には既に橋脚が配置されています", "warning");
+    return;
   }
+
+  // 橋脚を配置
+  const pierHeight = Math.max(0.7, nearestCandidate.railHeight);
+  piers.value.push({
+    position: nearestCandidate.position,
+    height: pierHeight,
+    rotation: [0, nearestCandidate.rotation, 0],
+  });
+
+  showNotification("橋脚を配置しました", "success");
 };
 
 const addStationAt = (x: number, z: number) => {
@@ -1391,9 +1394,21 @@ const createSlopeUpDownCurvesPreset = () => {
 };
 
 // ツールやモード変更、レール本数の変化でプレビューを更新
-watch(selectedTool, updateGhost);
-watch(gameMode, updateGhost);
-watch(() => rails.value.length, updateGhost);
+watch(selectedTool, () => {
+  updateGhost();
+  updatePierCandidates();
+});
+watch(gameMode, () => {
+  updateGhost();
+  updatePierCandidates();
+});
+watch(
+  () => rails.value.length,
+  () => {
+    updateGhost();
+    updatePierCandidates();
+  }
+);
 
 // 運転モード → 配置モードに切り替わったらカメラを自由視点へ戻す
 watch(gameMode, (mode, prev) => {

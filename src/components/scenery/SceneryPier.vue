@@ -2,15 +2,27 @@
   <TresGroup :position="position" :rotation="rotation" @click="onClick">
     <TresMesh :position="[-(FRAME_WIDTH / 2 - LEG_THICK / 2), LEG_HEIGHT / 2, 0]">
       <TresBoxGeometry :args="[LEG_THICK, LEG_HEIGHT, FRAME_DEPTH]" />
-      <TresMeshLambertMaterial :color="PIER_COLOR" :transparent="props.ghost" :opacity="props.ghost ? 0.5 : 1" />
+      <TresMeshLambertMaterial
+        :color="PIER_COLOR"
+        :transparent="props.ghost || props.candidate"
+        :opacity="props.ghost ? 0.5 : props.candidate ? 0.3 : 1"
+      />
     </TresMesh>
     <TresMesh :position="[FRAME_WIDTH / 2 - LEG_THICK / 2, LEG_HEIGHT / 2, 0]">
       <TresBoxGeometry :args="[LEG_THICK, LEG_HEIGHT, FRAME_DEPTH]" />
-      <TresMeshLambertMaterial :color="PIER_COLOR" :transparent="props.ghost" :opacity="props.ghost ? 0.5 : 1" />
+      <TresMeshLambertMaterial
+        :color="PIER_COLOR"
+        :transparent="props.ghost || props.candidate"
+        :opacity="props.ghost ? 0.5 : props.candidate ? 0.3 : 1"
+      />
     </TresMesh>
     <TresMesh :position="[0, LEG_HEIGHT + TOP_THICK / 2, 0]">
       <TresBoxGeometry :args="[FRAME_WIDTH, TOP_THICK, FRAME_DEPTH]" />
-      <TresMeshLambertMaterial :color="PIER_COLOR" :transparent="props.ghost" :opacity="props.ghost ? 0.5 : 1" />
+      <TresMeshLambertMaterial
+        :color="PIER_COLOR"
+        :transparent="props.ghost || props.candidate"
+        :opacity="props.ghost ? 0.5 : props.candidate ? 0.3 : 1"
+      />
     </TresMesh>
   </TresGroup>
 </template>
@@ -23,11 +35,12 @@ const props = defineProps<{
   height?: number;
   rotation?: [number, number, number];
   ghost?: boolean;
+  candidate?: boolean;
 }>();
 
 const emit = defineEmits<{ click: [] }>();
 const onClick = () => {
-  if (!props.ghost) {
+  if (!props.ghost && !props.candidate) {
     emit("click");
   }
 };

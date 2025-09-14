@@ -15,7 +15,7 @@
 
     <!-- Slope rail (curved slope with ease-in-out) -->
     <TresGroup v-else-if="rail.type === 'slope'" :key="`slope-${rail.id}`">
-      <TresGroup :position="[rail.position[0], 0, rail.position[2]]" :rotation="[0, -rail.rotation[1], 0]">
+      <TresGroup :position="[rail.position[0], 0, rail.position[2]]" :rotation="[0, rail.rotation[1], 0]">
         <TresMesh v-if="slopeGeometry" :geometry="slopeGeometry">
           <TresMeshLambertMaterial
             :color="ghost ? '#6AA0FF' : '#4169E1'"

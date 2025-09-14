@@ -53,13 +53,15 @@ export function useRailsGeometry() {
    */
   const makeStraight = (pose: Pose, length = RAIL_STRAIGHT_FULL_LENGTH): Rail => {
     const start = pose.point;
-    const end: Vec3 = [start[0] + Math.cos(pose.theta) * length, start[1], start[2] - Math.sin(pose.theta) * length];
+    const dirx = Math.cos(pose.theta);
+    const dirz = Math.sin(pose.theta);
+    const end: Vec3 = [start[0] + dirx * length, start[1], start[2] - dirz * length];
     const mid: Vec3 = [(start[0] + end[0]) / 2, start[1], (start[2] + end[2]) / 2];
     return {
       id: `straight-${Date.now()}-${Math.random()}`,
       type: "straight",
       position: mid,
-      rotation: [0, -pose.theta, 0],
+      rotation: [0, pose.theta, 0],
       connections: { start, end },
     };
   };
@@ -82,13 +84,13 @@ export function useRailsGeometry() {
     const dirx = Math.cos(pose.theta);
     const dirz = Math.sin(pose.theta);
     const rise = ascending ? RAIL_SLOPE_RISE : -RAIL_SLOPE_RISE;
-    const end: Vec3 = [start[0] + dirx * RAIL_SLOPE_RUN, start[1] + rise, start[2] + dirz * RAIL_SLOPE_RUN];
+    const end: Vec3 = [start[0] + dirx * RAIL_SLOPE_RUN, start[1] + rise, start[2] - dirz * RAIL_SLOPE_RUN];
     const mid: Vec3 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2, (start[2] + end[2]) / 2];
     return {
       id: `slope-${Date.now()}-${Math.random()}`,
       type: "slope",
       position: mid,
-      rotation: [0, -pose.theta, 0],
+      rotation: [0, pose.theta, 0],
       connections: { start, end },
     };
   };
@@ -137,15 +139,141 @@ export function useRailsGeometry() {
     const endInArea = isWithinArea(rail.connections.end);
     const positionInArea = isWithinArea(rail.position);
 
-    // 高さ制限チェック
+    // 高さ制限チェック（最大高度）
     const startHeightOk = rail.connections.start[1] <= MAX_RAIL_HEIGHT;
     const endHeightOk = rail.connections.end[1] <= MAX_RAIL_HEIGHT;
     const positionHeightOk = rail.position[1] <= MAX_RAIL_HEIGHT;
 
-    return startInArea && endInArea && positionInArea && startHeightOk && endHeightOk && positionHeightOk;
+    // 床の下チェック（最小高度）
+    const EPSILON = 1e-10; // 浮動小数点誤差対策
+    const startAboveGround = rail.connections.start[1] >= -EPSILON;
+    const endAboveGround = rail.connections.end[1] >= -EPSILON;
+    const positionAboveGround = rail.position[1] >= -EPSILON;
+
+    return (
+      startInArea &&
+      endInArea &&
+      positionInArea &&
+      startHeightOk &&
+      endHeightOk &&
+      positionHeightOk &&
+      startAboveGround &&
+      endAboveGround &&
+      positionAboveGround
+    );
   };
 
-  // 橋脚が配置可能かチェックする関数
+  // 橋脚候補点の型定義
+  interface PierCandidate {
+    position: Vec3;
+    railHeight: number;
+    railId: string;
+    rotation: number;
+    connectionType: "start" | "end";
+  }
+
+  // 橋脚配置候補点を生成
+  const generatePierCandidates = (rails: Rail[]): PierCandidate[] => {
+    const candidates: PierCandidate[] = [];
+    const SNAP_THRESHOLD = 0.1; // 重複除去用の閾値
+
+    for (const rail of rails) {
+      // 開始点の候補
+      if (rail.connections.start[1] >= MIN_PIER_HEIGHT) {
+        const startCandidate: PierCandidate = {
+          position: [rail.connections.start[0], 0, rail.connections.start[2]],
+          railHeight: rail.connections.start[1],
+          railId: rail.id,
+          rotation: getRailRotationAtConnection(rail, "start"),
+          connectionType: "start",
+        };
+
+        // 重複チェック（同じ位置に複数の候補がある場合は統合）
+        const existing = candidates.find(
+          (c) =>
+            Math.hypot(c.position[0] - startCandidate.position[0], c.position[2] - startCandidate.position[2]) <
+            SNAP_THRESHOLD
+        );
+
+        if (!existing) {
+          candidates.push(startCandidate);
+        } else if (existing.railHeight < startCandidate.railHeight) {
+          // より高い線路の高さを採用
+          existing.railHeight = startCandidate.railHeight;
+          existing.rotation = startCandidate.rotation;
+        }
+      }
+
+      // 終了点の候補
+      if (rail.connections.end[1] >= MIN_PIER_HEIGHT) {
+        const endCandidate: PierCandidate = {
+          position: [rail.connections.end[0], 0, rail.connections.end[2]],
+          railHeight: rail.connections.end[1],
+          railId: rail.id,
+          rotation: getRailRotationAtConnection(rail, "end"),
+          connectionType: "end",
+        };
+
+        // 重複チェック
+        const existing = candidates.find(
+          (c) =>
+            Math.hypot(c.position[0] - endCandidate.position[0], c.position[2] - endCandidate.position[2]) <
+            SNAP_THRESHOLD
+        );
+
+        if (!existing) {
+          candidates.push(endCandidate);
+        } else if (existing.railHeight < endCandidate.railHeight) {
+          // より高い線路の高さを採用
+          existing.railHeight = endCandidate.railHeight;
+          existing.rotation = endCandidate.rotation;
+        }
+      }
+    }
+
+    return candidates;
+  };
+
+  // レールの接続点での回転角度を取得
+  const getRailRotationAtConnection = (rail: Rail, connectionType: "start" | "end"): number => {
+    // 線路の接線方向を取得
+    let railDirection: number;
+    console.log((rail.rotation[1] / Math.PI) * 180);
+    if (rail.type === "curve" || rail.type === "curve-slope") {
+      // カーブの場合、接続点での接線方向を計算
+      const baseRotation = rail.rotation[1];
+      if (connectionType === "start") {
+        railDirection = baseRotation;
+      } else {
+        // 終点の場合は、カーブの終端での方向
+        const curveAngle = rail.direction === "right" ? -CURVE_ANGLE : CURVE_ANGLE;
+        return baseRotation + curveAngle + Math.PI / 2;
+      }
+    } else {
+      // 直線レール、スロープ、駅、踏切の場合
+      return rail.rotation[1] + Math.PI / 2; // 橋脚は線路に垂直
+    }
+  };
+
+  // スマートスナップ: 最も近い橋脚候補を検索
+  const findNearestPierCandidate = (clickPos: Vec3, candidates: PierCandidate[]): PierCandidate | null => {
+    const SNAP_THRESHOLD = 2.0; // スナップ範囲（2グリッド以内）
+    let nearest: PierCandidate | null = null;
+    let minDistance = Infinity;
+
+    for (const candidate of candidates) {
+      const distance = Math.hypot(clickPos[0] - candidate.position[0], clickPos[2] - candidate.position[2]);
+
+      if (distance < minDistance && distance < SNAP_THRESHOLD) {
+        minDistance = distance;
+        nearest = candidate;
+      }
+    }
+
+    return nearest;
+  };
+
+  // 橋脚が配置可能かチェックする関数（従来版・互換性維持）
   const canPlacePier = (
     position: Vec3,
     rails: Rail[]
@@ -422,5 +550,8 @@ export function useRailsGeometry() {
     canPlaceRail,
     isWithinArea,
     canPlacePier,
+    generatePierCandidates,
+    findNearestPierCandidate,
+    getRailRotationAtConnection,
   } as const;
 }

@@ -133,6 +133,16 @@
       :ghost="true"
     />
 
+    <!-- Pier candidates preview (semi-transparent) -->
+    <SceneryPier
+      v-for="(candidate, i) in pierCandidates"
+      :key="`pier-candidate-${i}`"
+      :position="candidate.position"
+      :height="candidate.height"
+      :rotation="candidate.rotation"
+      :candidate="true"
+    />
+
     <!-- Ghost station preview is rendered inside RailSegment component -->
   </TresCanvas>
 </template>
@@ -193,6 +203,11 @@ interface Props {
     rotation?: [number, number, number];
   } | null;
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
+  pierCandidates: Array<{
+    position: [number, number, number];
+    height: number;
+    rotation: [number, number, number];
+  }>;
 }
 
 import { AREA_LIMIT } from "../../constants/area";

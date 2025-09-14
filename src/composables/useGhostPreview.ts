@@ -19,6 +19,11 @@ export interface GhostPreviewState {
     height?: number;
     rotation?: [number, number, number];
   } | null>;
+  pierCandidates: Ref<Array<{
+    position: [number, number, number];
+    height: number;
+    rotation: [number, number, number];
+  }>>;
 }
 
 export function useGhostPreview(
@@ -31,7 +36,7 @@ export function useGhostPreview(
     type: "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
   ) => Rail
 ) {
-  const { makeLeftCurve, makeRightCurve, makeLeftCurveSlope, makeRightCurveSlope } = useRailsGeometry();
+  const { makeLeftCurve, makeRightCurve, makeLeftCurveSlope, makeRightCurveSlope, generatePierCandidates } = useRailsGeometry();
 
   // State
   const lastPointer = ref<{ x: number; z: number } | null>(null);
@@ -49,6 +54,11 @@ export function useGhostPreview(
     height?: number;
     rotation?: [number, number, number];
   } | null>(null);
+  const pierCandidates = ref<Array<{
+    position: [number, number, number];
+    height: number;
+    rotation: [number, number, number];
+  }>>([]);
 
   // Helper functions
   const snapToGridSize = (position: number, size: number): number => {
@@ -75,8 +85,23 @@ export function useGhostPreview(
     updateGhost();
   };
 
+  // 橋脚候補を更新（線路変更時とツール選択時のみ）
+  const updatePierCandidates = () => {
+    if (gameMode.value !== "build" || selectedTool.value !== "pier") {
+      pierCandidates.value = [];
+      return;
+    }
+
+    const candidates = generatePierCandidates(rails.value);
+    pierCandidates.value = candidates.map(candidate => ({
+      position: candidate.position,
+      height: Math.max(0.7, candidate.railHeight),
+      rotation: [0, candidate.rotation, 0] as [number, number, number]
+    }));
+  };
+
   const updateGhost = () => {
-    // すべて初期化
+    // ゴーストのみ初期化（橋脚候補は別途管理）
     ghostRail.value = null;
     ghostTree.value = null;
     ghostBuilding.value = null;
@@ -101,7 +126,14 @@ export function useGhostPreview(
         const gr = createRail(
           lastPointer.value.x,
           lastPointer.value.z,
-          selectedTool.value as "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
+          selectedTool.value as
+            | "straight"
+            | "curve"
+            | "slope"
+            | "curve-slope-up"
+            | "curve-slope-down"
+            | "station"
+            | "crossing"
         );
         if (gr.type === "straight" || gr.type === "slope" || gr.type === "station" || gr.type === "crossing") {
           gr.rotation = [gr.rotation[0], desired, gr.rotation[2]];
@@ -117,7 +149,6 @@ export function useGhostPreview(
               end: [ix + dirX * len, iy, iz + dirZ * len],
             };
           } else if (gr.type === "slope") {
-            console.log("slope ghost");
             gr.connections = {
               start: [ix - dirX * len, startY, iz - dirZ * len],
               end: [ix + dirX * len, endY, iz + dirZ * len],
@@ -238,6 +269,7 @@ export function useGhostPreview(
     ghostTree.value = null;
     ghostBuilding.value = null;
     ghostPier.value = null;
+    pierCandidates.value = [];
     lastPointer.value = null;
   };
 
@@ -251,11 +283,13 @@ export function useGhostPreview(
     ghostTree,
     ghostBuilding,
     ghostPier,
+    pierCandidates,
 
     // Methods
     rotatePlacement,
     resetPlacementRotation,
     updateGhost,
+    updatePierCandidates,
     updatePointer,
     resetGhosts,
     getPlacementRotation,
