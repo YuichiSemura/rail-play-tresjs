@@ -116,7 +116,7 @@
           />
         </TresMesh>
       </TresGroup>
-      <RailPlayStation :position="rail.position" :rotation="rail.rotation" :ghost="ghost" />
+      <RailStation :position="rail.position" :rotation="rail.rotation" :ghost="ghost" />
     </TresGroup>
 
     <TresGroup v-else-if="rail.type === 'crossing'" :key="`crossing-${rail.id}`">
@@ -131,7 +131,7 @@
           />
         </TresMesh>
       </TresGroup>
-      <RailPlayCrossing :position="rail.position" :rotation="rail.rotation" :ghost="ghost" />
+      <RailCrossing :position="rail.position" :rotation="rail.rotation" :ghost="ghost" />
     </TresGroup>
   </TresGroup>
 </template>
@@ -140,8 +140,8 @@
 import type { Rail } from "../../types/rail";
 import { onMounted, ref, watch } from "vue";
 import * as THREE from "three";
-import RailPlayStation from "../RailPlayStation.vue";
-import RailPlayCrossing from "../RailPlayCrossing.vue";
+import RailStation from "./RailStation.vue";
+import RailCrossing from "./RailCrossing.vue";
 import {
   RAIL_STRAIGHT_FULL_LENGTH,
   CURVE_SEGMENT_ANGLE,

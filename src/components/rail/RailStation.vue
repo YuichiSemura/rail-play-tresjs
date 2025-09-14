@@ -73,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { RAIL_STRAIGHT_FULL_LENGTH } from "../constants/rail";
+import { RAIL_STRAIGHT_FULL_LENGTH } from "../../constants/rail";
 
 defineEmits<{ (e: "click"): void }>();
 const props = defineProps<{

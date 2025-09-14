@@ -47,10 +47,10 @@
             :last-pointer="lastPointer"
             :ghost-rail="ghostRail"
             :ghost-pier="ghostPier"
-            @createLargeCircle="createLargeCircle"
             @createOvalPreset="createOvalPreset"
             @createSCurvePreset="createSCurvePreset"
             @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
+            @loadCurveSlopePreset="loadCurveSlopePreset"
             @clearAllRails="clearAllRails"
             @handleSaveManual1="handleSaveManual1"
             @handleSaveManual2="handleSaveManual2"
@@ -168,6 +168,7 @@ interface TrainCustomization {
   bodyColor: string;
   roofColor: string;
   windowColor: string;
+  frontWindowColor: string; // 運転席前面窓色
   wheelColor: string;
 }
 
@@ -223,6 +224,7 @@ const trainCustomization = ref<TrainCustomization>({
   bodyColor: "#2E86C1",
   roofColor: "#1B4F72",
   windowColor: "#85C1E9",
+  frontWindowColor: "#F7DC6F",
   wheelColor: "#2C2C2C",
 });
 
@@ -847,18 +849,61 @@ const toggleGameMode = () => {
   }
 };
 
-const createLargeCircle = () => {
-  // 半径2 の 45° カーブ 8本で一周
-  rails.value = [];
-  const num = 8;
-  let pose: Pose = { point: [0, 0, 0], theta: 0 };
-  for (let i = 0; i < num; i++) {
-    const rail = makeLeftCurve(pose);
-    rails.value.push(rail);
-    pose = poseFromRailEnd(rail);
+// JSONファイルからプリセットデータをロードして線路を生成
+const loadCurveSlopePreset = async () => {
+  try {
+    // Viteでは静的JSONファイルは動的インポートで読み込む
+    const presetModule = await import("../data/curve_slope_preset.json");
+    const presetData = presetModule.default;
+
+    // 既存のレールをクリア
+    rails.value = [];
+    trees.value = [];
+    buildings.value = [];
+    piers.value = [];
+    isRailsLocked.value = false;
+    gameMode.value = "build";
+
+    // プリセットデータからレールを復元（型キャストして適用）
+    if (presetData.rails && Array.isArray(presetData.rails)) {
+      rails.value = presetData.rails as Rail[];
+    }
+    if (presetData.trees && Array.isArray(presetData.trees)) {
+      trees.value = presetData.trees as { position: [number, number, number]; rotation?: [number, number, number] }[];
+    }
+    if (presetData.buildings && Array.isArray(presetData.buildings)) {
+      buildings.value = presetData.buildings as {
+        position: [number, number, number];
+        height?: number;
+        color?: string;
+        rotation?: [number, number, number];
+      }[];
+    }
+    if (presetData.piers && Array.isArray(presetData.piers)) {
+      piers.value = presetData.piers as {
+        position: [number, number, number];
+        height?: number;
+        rotation?: [number, number, number];
+      }[];
+    }
+    if (presetData.isRailsLocked) {
+      isRailsLocked.value = presetData.isRailsLocked;
+    }
+    if (presetData.gameMode) {
+      gameMode.value = presetData.gameMode as GameMode;
+    }
+
+    // プレビューをリセット
+    resetGhosts();
+    resetToOrbit();
+    trainKey.value++;
+
+    const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
+    showNotification(`曲線スローププリセットを読み込みました（${totalItems}個のオブジェクト）`, "success");
+  } catch (error) {
+    console.error("プリセット読み込みエラー:", error);
+    showNotification("プリセットの読み込みに失敗しました", "error");
   }
-  isRailsLocked.value = true;
-  gameMode.value = "run";
 };
 
 // 先頭カメラ視点 微調整ドラッグ
@@ -1181,6 +1226,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
         bodyColor: "#2E86C1",
         roofColor: "#1B4F72",
         windowColor: "#85C1E9",
+        frontWindowColor: "#F7DC6F",
         wheelColor: "#2C2C2C",
       };
       break;
@@ -1189,6 +1235,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
         bodyColor: "#E74C3C",
         roofColor: "#B71C1C",
         windowColor: "#FFCDD2",
+        frontWindowColor: "#FAD7A0",
         wheelColor: "#424242",
       };
       break;
@@ -1197,6 +1244,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
         bodyColor: "#27AE60",
         roofColor: "#1B5E20",
         windowColor: "#C8E6C9",
+        frontWindowColor: "#D5F5E3",
         wheelColor: "#2E2E2E",
       };
       break;

@@ -252,6 +252,8 @@ export function useRailsGeometry() {
       // 直線レール、スロープ、駅、踏切の場合
       return rail.rotation[1] + Math.PI / 2; // 橋脚は線路に垂直
     }
+    // カーブ開始点の場合
+    return railDirection + Math.PI / 2;
   };
 
   // スマートスナップ: 最も近い橋脚候補を検索

@@ -170,12 +170,6 @@
     <v-card-subtitle>プリセット線路</v-card-subtitle>
     <v-row dense class="pa-2">
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('createLargeCircle')" :disabled="rails.length > 0" block class="mb-2">
-          <v-icon size="small">mdi-circle-outline</v-icon>
-          <span class="text-caption">大きな円</span>
-        </v-btn>
-      </v-col>
-      <v-col cols="6">
         <v-btn color="secondary" @click="$emit('createOvalPreset')" :disabled="rails.length > 0" block class="mb-2">
           <v-icon size="small">mdi-ellipse-outline</v-icon>
           <span class="text-caption">オーバル</span>
@@ -197,6 +191,18 @@
         >
           <v-icon size="small">mdi-trending-up</v-icon>
           <span class="text-caption">スロープ</span>
+        </v-btn>
+      </v-col>
+      <v-col cols="6">
+        <v-btn
+          color="secondary"
+          @click="$emit('loadCurveSlopePreset')"
+          :disabled="rails.length > 0"
+          block
+          class="mb-2"
+        >
+          <v-icon size="small">mdi-file-document-outline</v-icon>
+          <span class="text-caption">曲線スロープ</span>
         </v-btn>
       </v-col>
       <v-col cols="12">
@@ -471,10 +477,10 @@ const emit = defineEmits<{
       | "delete"
   ];
   "update:currentTitle": [value: string];
-  createLargeCircle: [];
   createOvalPreset: [];
   createSCurvePreset: [];
   createSlopeUpDownCurvesPreset: [];
+  loadCurveSlopePreset: [];
   clearAllRails: [];
   handleSaveManual1: [];
   handleSaveManual2: [];

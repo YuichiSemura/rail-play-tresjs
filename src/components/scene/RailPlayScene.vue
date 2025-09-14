@@ -190,6 +190,7 @@ interface Props {
     bodyColor: string;
     roofColor: string;
     windowColor: string;
+    frontWindowColor: string;
     wheelColor: string;
   };
 
