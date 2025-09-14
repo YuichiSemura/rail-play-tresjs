@@ -72,16 +72,18 @@ export function useCameraController() {
     cameraRotation.value = [...ORBIT_INITIAL_ROTATION];
   };
 
-  // Constants for curve camera adjustment
-  const CURVE_LOOK_AHEAD_ANGLE = Math.PI / 4; // 約45度、カーブ内側を向く角度
+  // （旧仕様）カーブ内側固定角度調整は廃止 -> レール終端方向の先読み補間方式に変更
 
   //　フロントカメラとフォローカメラの処理
   const handleTrainPose = (payload: {
     position: [number, number, number];
     rotation: [number, number, number];
     railType?: string;
-    curveDirection?: string;
+    curveDirection?: string; // 互換性のため残しつつ未使用
     secondCarPosition?: [number, number, number];
+    currentEndYaw?: number; // 現在レールを t=1 まで進んだ場合の接線方向
+    nextEndYaw?: number; // 次レールの終端接線方向（無い場合は undefined）
+    segmentProgress?: number; // 現在レール内進行度 (0-1)
   }) => {
     // フォローモード: 2両目を注視点として設定
     if (cameraMode.value === "follow" && payload.secondCarPosition) {
@@ -99,21 +101,52 @@ export function useCameraController() {
     const oz = FRONT_OFFSET[0] * Math.sin(yaw) + FRONT_OFFSET[2] * Math.cos(yaw);
     const targetPos: [number, number, number] = [px - ox, py + FRONT_OFFSET[1], pz + oz];
 
-    // カーブでのカメラ角度調整: カーブの内側方向へ少し向ける
-    let curveAdjustment = 0;
-    if (payload.railType === "curve" || payload.railType === "curve-slope") {
-      if (payload.curveDirection === "left") {
-        // 左カーブ: カメラを左（内側）に向ける
-        curveAdjustment = CURVE_LOOK_AHEAD_ANGLE;
-      } else if (payload.curveDirection === "right") {
-        // 右カーブ: カメラを右（内側）に向ける
-        curveAdjustment = -CURVE_LOOK_AHEAD_ANGLE;
-      }
+    // 新方式: 現在レール終端方向(currentEndYaw) と 次レール終端方向(nextEndYaw) を利用した先読み補間
+    // currentEndYaw / nextEndYaw は列車本来の yaw 系（後で rotation[1]-Math.PI を使っているため、同じ基準に合わせる）
+    const currentEndYaw = payload.currentEndYaw !== undefined ? payload.currentEndYaw - Math.PI : undefined;
+    const nextEndYawRaw = payload.nextEndYaw !== undefined ? payload.nextEndYaw - Math.PI : undefined;
+    const nextEndYaw = nextEndYawRaw ?? currentEndYaw;
+
+    // （新）レール一本を使ってゆっくり方向転換: segmentProgress で先読み寄せを制御
+    const tSeg = clamp(payload.segmentProgress ?? 0, 0, 1);
+    // easeInOut (smoothstep) で序盤ゆっくり終盤加速
+    const ease = tSeg * tSeg * (3 - 2 * tSeg);
+    const MAX_LOOK_AHEAD_BLEND = 0.85; // 終端で最大どれだけ次レール終端方向へ寄せるか
+    const dynamicLookAheadBlend = MAX_LOOK_AHEAD_BLEND * ease;
+
+    let lookAheadYaw: number | undefined;
+    if (currentEndYaw !== undefined && nextEndYaw !== undefined) {
+      let delta = nextEndYaw - currentEndYaw;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      lookAheadYaw = currentEndYaw + delta * dynamicLookAheadBlend;
     }
 
-    // 電車の進行方向（スロープでのピッチ）とユーザーの手動調整、カーブ調整を合成
-    const targetYaw = yaw + frontLookYaw.value + curveAdjustment;
-    const targetPitch = -pitch + frontLookPitch.value; // スロープの傾斜 + 手動調整
+    const CAMERA_YAW_BLEND = 1.2; // 現在接線 yaw と look-ahead のブレンド（1未満で過剰先行を防止）
+    let blendedYaw = yaw;
+    if (lookAheadYaw !== undefined) {
+      let dy = lookAheadYaw - yaw;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      blendedYaw = yaw + dy * CAMERA_YAW_BLEND; // 先読み方向へ寄せる
+    }
+
+    // 追加スムージング（レール境界で blendedYaw が急変しないように）
+    const BLENDED_YAW_SMOOTH = 0.05;
+    if ((handleTrainPose as any)._smoothedYaw === undefined) {
+      (handleTrainPose as any)._smoothedYaw = blendedYaw;
+    } else {
+      let prev = (handleTrainPose as any)._smoothedYaw as number;
+      let d = blendedYaw - prev;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      (handleTrainPose as any)._smoothedYaw = prev + d * BLENDED_YAW_SMOOTH;
+    }
+    const stabilizedYaw = (handleTrainPose as any)._smoothedYaw as number;
+
+    // 電車の進行方向（スロープでのピッチ） + ユーザー手動調整 + 先読み補間 + スムージング
+    const targetYaw = stabilizedYaw + frontLookYaw.value;
+    const targetPitch = -pitch + frontLookPitch.value; // ピッチは元の傾斜を忠実に（/3 を撤回）
 
     // 現在値から目標へ補間
     cameraPosition.value = lerp3(cameraPosition.value, targetPos, CAM_POS_LERP);

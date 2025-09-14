@@ -33,77 +33,90 @@
 
     <!-- 前面オーバーレイのサイドバー -->
     <div v-if="sidebarOpen" class="sidebar-overlay">
-      <v-card class="sidebar-card overflow-y-auto">
-        <v-card-title class="align-center">
-          <div class="mb-2">
-            <v-btn
-              v-if="gameMode !== 'customize'"
-              size="small"
-              class="mr-2"
-              :color="gameMode === 'run' ? 'success' : 'primary'"
-              @click="toggleGameMode"
-              :disabled="gameMode === 'build' && !canRunTrain"
-            >
-              <v-icon>{{ gameMode === "build" ? "mdi-play" : "mdi-wrench" }}</v-icon>
-              {{ gameMode === "build" ? "運転" : "配置" }}
-            </v-btn>
-            <v-btn size="small" color="secondary" @click="toggleCustomizeMode">
-              <v-icon>{{ gameMode === "customize" ? "mdi-arrow-left" : "mdi-palette" }}</v-icon>
-              {{ gameMode === "customize" ? "戻る" : "カスタム" }}
-            </v-btn>
-            <v-btn size="small" color="info" @click="helpDialog = true" class="ml-2">
-              <v-icon>mdi-help-circle</v-icon>
-              ヘルプ
-            </v-btn>
-          </div>
+      <v-card class="sidebar-card d-flex flex-column">
+        <v-card-title class="align-center d-flex justify-space-between pr-2">
+          <div class="d-flex flex-column">
+            <div class="mb-2">
+              <v-btn
+                v-if="gameMode !== 'customize'"
+                size="small"
+                class="mr-2"
+                :color="gameMode === 'run' ? 'success' : 'primary'"
+                @click="toggleGameMode"
+                :disabled="gameMode === 'build' && !canRunTrain"
+              >
+                <v-icon>{{ gameMode === "build" ? "mdi-play" : "mdi-wrench" }}</v-icon>
+                {{ gameMode === "build" ? "運転" : "配置" }}
+              </v-btn>
+              <v-btn size="small" color="secondary" @click="toggleCustomizeMode">
+                <v-icon>{{ gameMode === "customize" ? "mdi-arrow-left" : "mdi-palette" }}</v-icon>
+                {{ gameMode === "customize" ? "戻る" : "カスタム" }}
+              </v-btn>
+              <v-btn size="small" color="info" @click="helpDialog = true" class="ml-2">
+                <v-icon>mdi-help-circle</v-icon>
+                ヘルプ
+              </v-btn>
+            </div>
 
-          <v-divider class="my-4" />
-          <h3>{{ getModeTitle(gameMode) }}</h3>
+            <v-divider class="my-4" />
+            <h3>{{ getModeTitle(gameMode) }}</h3>
+          </div>
+          <v-btn icon size="small" variant="text" @click="onRequestClose" :aria-label="'サイドバーを閉じる'">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
         </v-card-title>
 
-        <BuildPanel
-          v-if="gameMode === 'build'"
-          v-model:selectedTool="selectedTool"
-          v-model:currentTitle="currentTitle"
-          :rails="rails"
-          :trees="trees"
-          :buildings="buildings"
-          :piers="piers"
-          :is-rails-locked="isRailsLocked"
-          :save-data-info="saveDataInfo"
-          :has-manual-save1="storage.hasManual1()"
-          :has-manual-save2="storage.hasManual2()"
-          :manual-save-info1="storage.getManualInfo1()"
-          :manual-save-info2="storage.getManualInfo2()"
-          :last-pointer="lastPointer"
-          :ghost-rail="ghostRail"
-          :ghost-pier="ghostPier"
-          @createOvalPreset="createOvalPreset"
-          @createSCurvePreset="createSCurvePreset"
-          @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
-          @loadCurveSlopePreset="loadCurveSlopePreset"
-          @clearAllRails="clearAllRails"
-          @handleSaveManual1="handleSaveManual1"
-          @handleSaveManual2="handleSaveManual2"
-          @handleLoadManual1="handleLoadManual1"
-          @handleLoadManual2="handleLoadManual2"
-        />
+        <div class="sidebar-content">
+          <BuildPanel
+            v-if="gameMode === 'build'"
+            v-model:selectedTool="selectedTool"
+            v-model:currentTitle="currentTitle"
+            :rails="rails"
+            :trees="trees"
+            :buildings="buildings"
+            :piers="piers"
+            :is-rails-locked="isRailsLocked"
+            :save-data-info="saveDataInfo"
+            :has-manual-save1="storage.hasManual1()"
+            :has-manual-save2="storage.hasManual2()"
+            :manual-save-info1="storage.getManualInfo1()"
+            :manual-save-info2="storage.getManualInfo2()"
+            :last-pointer="lastPointer"
+            :ghost-rail="ghostRail"
+            :ghost-pier="ghostPier"
+            @createOvalPreset="createOvalPreset"
+            @createSCurvePreset="createSCurvePreset"
+            @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
+            @loadCurveSlopePreset="loadCurveSlopePreset"
+            @clearAllRails="clearAllRails"
+            @handleSaveManual1="handleSaveManual1"
+            @handleSaveManual2="handleSaveManual2"
+            @handleLoadManual1="handleLoadManual1"
+            @handleLoadManual2="handleLoadManual2"
+          />
 
-        <RunPanel
-          v-else-if="gameMode === 'run'"
-          :can-run-train="canRunTrain"
-          :train-running="trainRunning"
-          v-model:trainSpeed="trainSpeed"
-          :camera-mode="cameraMode"
-          @toggleTrain="toggleTrain"
-          @toggleCameraMode="toggleCameraMode"
-        />
+          <RunPanel
+            v-else-if="gameMode === 'run'"
+            :can-run-train="canRunTrain"
+            :train-running="trainRunning"
+            v-model:trainSpeed="trainSpeed"
+            :camera-mode="cameraMode"
+            @toggleTrain="toggleTrain"
+            @toggleCameraMode="toggleCameraMode"
+          />
 
-        <CustomizePanel
-          v-else-if="gameMode === 'customize'"
-          v-model:trainCustomization="trainCustomization"
-          @applyPreset="applyPreset"
-        />
+          <CustomizePanel
+            v-else-if="gameMode === 'customize'"
+            v-model:trainCustomization="trainCustomization"
+            @applyPreset="applyPreset"
+          />
+        </div>
+        <div class="sidebar-footer text-caption text-medium-emphasis">
+          ソースコードの参照・バグ報告:
+          <a href="https://github.com/YuichiSemura/rail-play-tresjs" target="_blank" rel="noopener"
+            >YuichiSemura/rail-play-tresjs</a
+          >
+        </div>
       </v-card>
     </div>
 
@@ -158,6 +171,9 @@ import {
 
 // Props
 const { sidebarOpen } = defineProps<{ sidebarOpen: boolean }>();
+const emit = defineEmits<{ (e: "closeSidebar"): void }>();
+
+const onRequestClose = () => emit("closeSidebar");
 
 // Rail は共通型を使用
 
@@ -1489,8 +1505,8 @@ onUnmounted(() => {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 10;
-  width: 75vw; /* スマホ: 9/12 = 75% */
+  z-index: 120; /* ハンバーガーボタン(50) より前面 */
+  width: 91.666vw; /* スマホ: 11/12 = 91.666% */
   height: 100vh;
   pointer-events: none; /* カード以外はクリックを透過 */
 }
@@ -1522,5 +1538,27 @@ onUnmounted(() => {
   padding: 8px;
   background: rgba(255, 255, 255, 0.85); /* より透明な背景 */
   backdrop-filter: blur(2px); /* 背景ぼかし効果 */
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 4px; /* スクロールバー余白 */
+}
+
+.sidebar-footer {
+  flex: 0 0 auto;
+  padding: 8px 4px 4px 4px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.sidebar-footer a {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.sidebar-footer a:hover {
+  text-decoration: underline;
 }
 </style>

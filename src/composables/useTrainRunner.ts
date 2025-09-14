@@ -57,8 +57,12 @@ export function useTrainRunner(
    * - t=0.5付近: 線形的な変化
    * - t=1付近: ゆっくり終了（2次関数的減速）
    */
-  const easeInOutQuad = (t: number) => {
-    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+  const easeInOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+  // 線形寄りにするためのブレンド: 0 = 元の easeInOut, 1 = 完全線形
+  const SLOPE_EASE_LINEAR_BLEND = 0.65; // 調整パラメータ（必要なら外部設定化）
+  const blendedEase = (t: number) => {
+    const e = easeInOutQuad(t);
+    return e * (1 - SLOPE_EASE_LINEAR_BLEND) + t * SLOPE_EASE_LINEAR_BLEND;
   };
 
   /**
@@ -119,7 +123,7 @@ export function useTrainRunner(
 
       // Y座標はease-in-outカーブで補間（滑らかな坂道）
       const totalRise = ey - sy;
-      const easedT = easeInOutQuad(t);
+      const easedT = blendedEase(t);
       const y = sy + totalRise * easedT + HEIGHT_OFFSET;
 
       const yaw = Math.atan2(nx, nz);
@@ -127,8 +131,8 @@ export function useTrainRunner(
       // ピッチ角度もease-in-outカーブの接線に合わせて計算
       // 微分近似で接線の傾きを求める
       const deltaT = 0.001; // 微小変化量
-      const easedT1 = easeInOutQuad(Math.max(0, t - deltaT));
-      const easedT2 = easeInOutQuad(Math.min(1, t + deltaT));
+      const easedT1 = blendedEase(Math.max(0, t - deltaT));
+      const easedT2 = blendedEase(Math.min(1, t + deltaT));
       const dydt = ((easedT2 - easedT1) / (2 * deltaT)) * totalRise; // Y方向の変化率
       const dxdt = len; // X方向の変化量は一定
       const pitch = Math.atan2(dydt, dxdt); // 接線の傾斜角
@@ -156,13 +160,13 @@ export function useTrainRunner(
       const startY = r.connections.start[1];
       const endY = r.connections.end[1];
       const totalRise = endY - startY;
-      const easedT = easeInOutQuad(t);
+      const easedT = blendedEase(t);
       const y = startY + totalRise * easedT + HEIGHT_OFFSET;
 
       // ピッチ角度の計算（カーブスロープの傾斜）
       const deltaT = 0.001;
-      const easedT1 = easeInOutQuad(Math.max(0, t - deltaT));
-      const easedT2 = easeInOutQuad(Math.min(1, t + deltaT));
+      const easedT1 = blendedEase(Math.max(0, t - deltaT));
+      const easedT2 = blendedEase(Math.min(1, t + deltaT));
       const dydt = ((easedT2 - easedT1) / (2 * deltaT)) * totalRise; // 高度変化率
       const arcLength = RAIL_CURVE_RADIUS * CURVE_ANGLE; // カーブの弧長
       const dxdt = arcLength; // 弧に沿った距離の変化量
@@ -224,6 +228,9 @@ export function useTrainRunner(
     railType?: string;
     curveDirection?: string;
     secondCarPosition?: [number, number, number];
+    currentEndYaw?: number;
+    nextEndYaw?: number;
+    segmentProgress?: number; // 現在レール内の進行度(0-1)
   }) => {
     trainPoseCallbacks.forEach((callback) => callback(pose));
   };
@@ -293,12 +300,45 @@ export function useTrainRunner(
     // 注意: カメラ向きの調整のため、yaw角度からMath.PIを引いている
     const currentRail = rails.value[idx] || rails.value[0];
     const secondCarPosition = poses.length >= 2 ? poses[1].position : undefined;
+
+    // 現在レール終端方向と次レール終端方向の yaw を算出し、フロントカメラ向き補間に利用できるよう渡す
+    const computeStraightYaw = (sx: number, sz: number, ex: number, ez: number) => {
+      // NOTE: dz は end - start が正しい（以前 - (end - start) になっていたため向きが逆転していた）
+      const dx = ex - sx;
+      const dz = ez - sz;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = dx / len;
+      const nz = dz / len;
+      return Math.atan2(nx, nz);
+    };
+
+    const endYawOf = (r: Rail): number => {
+      if (r.type === "straight" || r.type === "station" || r.type === "crossing" || r.type === "slope") {
+        return computeStraightYaw(
+          r.connections.start[0],
+          r.connections.start[2],
+          r.connections.end[0],
+          r.connections.end[2]
+        );
+      }
+      // curve / curve-slope: getPoseOnRail で t=1 の rotation[1] を取得
+      const poseEnd = getPoseOnRail(r, 1);
+      return poseEnd.rotation[1];
+    };
+
+    const currentEndYaw = currentRail ? endYawOf(currentRail) : undefined;
+    const nextRail = rails.value[(idx + 1) % rails.value.length];
+    const nextEndYaw = nextRail ? endYawOf(nextRail) : undefined;
+
     emitTrainPose({
       position: lead.position,
       rotation: [lead.rotation[0], lead.rotation[1] - Math.PI, lead.rotation[2]],
       railType: currentRail?.type,
       curveDirection: currentRail && "direction" in currentRail ? currentRail.direction : undefined,
       secondCarPosition,
+      currentEndYaw,
+      nextEndYaw,
+      segmentProgress: t,
     });
   };
 

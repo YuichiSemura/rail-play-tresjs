@@ -171,6 +171,17 @@ const curveGeometry = ref<THREE.ExtrudeGeometry | null>(null);
 const slopeGeometry = ref<THREE.BufferGeometry | null>(null);
 const curveSlopeGeometry = ref<THREE.BufferGeometry | null>(null);
 
+// より直線的なease-in-out関数（緩やかな曲線）
+const easeInOutQuad = (t: number) => {
+  return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+};
+// 線形寄りにするためのブレンド: 0 = 元の easeInOut, 1 = 完全線形
+const SLOPE_EASE_LINEAR_BLEND = 0.65; // 調整パラメータ（必要なら外部設定化）
+const blendedEase = (t: number) => {
+  const e = easeInOutQuad(t);
+  return e * (1 - SLOPE_EASE_LINEAR_BLEND) + t * SLOPE_EASE_LINEAR_BLEND;
+};
+
 const buildSlopeGeometry = () => {
   // 既存のジオメトリを破棄してから再生成
   if (slopeGeometry.value) {
@@ -182,11 +193,6 @@ const buildSlopeGeometry = () => {
   const startY = props.rail.connections.start[1];
   const endY = props.rail.connections.end[1];
   const totalRise = endY - startY;
-
-  // より直線的なease-in-out関数（緩やかな曲線）
-  const easeInOutQuad = (t: number) => {
-    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-  };
 
   // カスタムジオメトリを作成
   const segments = 32;
@@ -298,12 +304,6 @@ const buildCurveSlopeGeometry = () => {
   const startY = props.rail.connections.start[1];
   const endY = props.rail.connections.end[1];
   const totalRise = endY - startY;
-  // const totalRise = 0.175; // 固定で0.175m上昇（RAIL_SLOPE_RUNに合わせる）
-
-  // ease-in-out 関数（スロープと同じ）
-  const easeInOutQuad = (t: number) => {
-    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-  };
 
   // 線路の断面形状（長方形）を定義
   const railCrossSection = new THREE.Shape();
@@ -333,7 +333,7 @@ const buildCurveSlopeGeometry = () => {
     const x = Math.sin(angle) * radius * (isRight ? -1 : 1); // 右カーブはX座標を反転
 
     // 高さをease-in-outで補間
-    const easedT = easeInOutQuad(t);
+    const easedT = blendedEase(t);
     const y = totalRise * easedT;
 
     spiralPoints.push(new THREE.Vector3(x, y, z));
