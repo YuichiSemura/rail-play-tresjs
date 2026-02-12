@@ -123,16 +123,16 @@ export function useTrainRunner(
 
       // Y座標はease-in-outカーブで補間（滑らかな坂道）
       const totalRise = ey - sy;
-      const easedT = blendedEase(t);
+      const easedT = easeInOutQuad(t);
       const y = sy + totalRise * easedT + HEIGHT_OFFSET;
 
       const yaw = Math.atan2(nx, nz);
 
       // ピッチ角度もease-in-outカーブの接線に合わせて計算
-      // 微分近似で接線の傾きを求める
+      // 微分近似で接線の傾きを求める（視覚レールと同じeaseInOutQuadを使用）
       const deltaT = 0.001; // 微小変化量
-      const easedT1 = blendedEase(Math.max(0, t - deltaT));
-      const easedT2 = blendedEase(Math.min(1, t + deltaT));
+      const easedT1 = easeInOutQuad(Math.max(0, t - deltaT));
+      const easedT2 = easeInOutQuad(Math.min(1, t + deltaT));
       const dydt = ((easedT2 - easedT1) / (2 * deltaT)) * totalRise; // Y方向の変化率
       const dxdt = len; // X方向の変化量は一定
       const pitch = Math.atan2(dydt, dxdt); // 接線の傾斜角
