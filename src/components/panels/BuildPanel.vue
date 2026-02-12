@@ -3,7 +3,7 @@
     <v-card-subtitle>操作</v-card-subtitle>
     <!-- v-btn-toggle は内部が単行スクロールのため折り返しできず項目が欠けるケースがある。
          v-item-group + v-item + v-btn 構成に置換し、flex-wrap で全項目を表示する。 -->
-    <v-item-group v-model="selectedToolProxy" mandatory class="d-flex flex-wrap pa-2" style="gap: 8px">
+    <v-item-group v-model="store.selectedTool" mandatory class="d-flex flex-wrap pa-2" style="gap: 8px">
       <v-item value="none" v-slot="{ isSelected, toggle }">
         <v-btn
           :color="isSelected ? 'primary' : undefined"
@@ -19,7 +19,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-minus</v-icon>
           直線
@@ -30,7 +30,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-rotate-right</v-icon>
           カーブ
@@ -41,7 +41,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-trending-up</v-icon>
           スロープ
@@ -52,7 +52,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-chart-timeline-variant</v-icon>
           曲線スロープ（上り）
@@ -63,7 +63,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-chart-timeline-variant-reverse</v-icon>
           曲線スロープ（下り）
@@ -74,7 +74,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-boom-gate</v-icon>
           踏切
@@ -85,7 +85,7 @@
           :color="isSelected ? 'primary' : undefined"
           :variant="isSelected ? 'elevated' : 'outlined'"
           @click="toggle"
-          :disabled="isRailsLocked"
+          :disabled="store.isRailsLocked"
         >
           <v-icon>mdi-train</v-icon>
           駅ホーム
@@ -137,8 +137,26 @@
 
     <v-divider class="my-4" />
 
+    <v-card-subtitle>履歴操作</v-card-subtitle>
+    <v-row dense class="pa-2">
+      <v-col cols="6">
+        <v-btn color="info" @click="handleUndo" :disabled="!store.canUndo" block class="mb-2">
+          <v-icon size="small">mdi-undo</v-icon>
+          <span class="text-caption">元に戻す (Ctrl+Z)</span>
+        </v-btn>
+      </v-col>
+      <v-col cols="6">
+        <v-btn color="info" @click="handleRedo" :disabled="!store.canRedo" block class="mb-2">
+          <v-icon size="small">mdi-redo</v-icon>
+          <span class="text-caption">やり直す (Ctrl+Shift+Z)</span>
+        </v-btn>
+      </v-col>
+    </v-row>
+
+    <v-divider class="my-4" />
+
     <v-text-field
-      v-model="titleProxy"
+      v-model="store.currentTitle"
       label="作成中の線路にタイトルを設定"
       placeholder="例: 山手線、中央線、私の線路..."
       density="comfortable"
@@ -149,22 +167,22 @@
     />
     <div class="text-caption text-medium-emphasis mx-2 mb-2">※ タイトルは保存時に記録され、復元時に表示されます</div>
 
-    <v-alert v-if="isRailsLocked" type="success" class="mt-4"> 周回線路が完成！ </v-alert>
+    <v-alert v-if="store.isRailsLocked" type="success" class="mt-4"> 周回線路が完成！ </v-alert>
 
-    <v-alert v-else-if="rails.length > 0" type="info" class="mt-4"> 線路: {{ rails.length }}本配置済み </v-alert>
+    <v-alert v-else-if="store.rails.length > 0" type="info" class="mt-4"> 線路: {{ store.rails.length }}本配置済み </v-alert>
 
     <v-divider class="my-4" />
 
     <v-card-subtitle>プリセット線路</v-card-subtitle>
     <v-row dense class="pa-2">
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('createOvalPreset')" :disabled="rails.length > 0" block class="mb-2">
+        <v-btn color="secondary" @click="createOvalPreset()" :disabled="store.rails.length > 0" block class="mb-2">
           <v-icon size="small">mdi-ellipse-outline</v-icon>
           <span class="text-caption">オーバル</span>
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('createSCurvePreset')" :disabled="rails.length > 0" block class="mb-2">
+        <v-btn color="secondary" @click="createSCurvePreset()" :disabled="store.rails.length > 0" block class="mb-2">
           <v-icon size="small">mdi-axis-z-rotate-clockwise</v-icon>
           <span class="text-caption">S字</span>
         </v-btn>
@@ -172,8 +190,8 @@
       <v-col cols="6">
         <v-btn
           color="secondary"
-          @click="$emit('createSlopeUpDownCurvesPreset')"
-          :disabled="rails.length > 0"
+          @click="createSlopeUpDownCurvesPreset()"
+          :disabled="store.rails.length > 0"
           block
           class="mb-2"
         >
@@ -182,7 +200,7 @@
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('loadCurveSlopePreset')" :disabled="rails.length > 0" block class="mb-2">
+        <v-btn color="secondary" @click="loadCurveSlopePreset()" :disabled="store.rails.length > 0" block class="mb-2">
           <v-icon size="small">mdi-file-document-outline</v-icon>
           <span class="text-caption">曲線スロープ</span>
         </v-btn>
@@ -190,8 +208,8 @@
       <v-col cols="12">
         <v-btn
           color="warning"
-          @click="$emit('clearAllRails')"
-          :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+          @click="clearAllRails()"
+          :disabled="store.rails.length === 0 && store.trees.length === 0 && store.buildings.length === 0 && store.piers.length === 0"
           block
         >
           <v-icon>mdi-delete-sweep</v-icon>
@@ -205,11 +223,11 @@
     <v-card-subtitle>自動保存状況</v-card-subtitle>
     <v-row dense class="pa-2">
       <v-col cols="12">
-        <div v-if="saveDataInfo" class="text-caption text-medium-emphasis mx-2">
-          最終自動保存: {{ new Date(saveDataInfo.timestamp).toLocaleString() }}<br />
-          線路{{ saveDataInfo.railsCount }}本、木{{ saveDataInfo.treesCount }}本、ビル{{
-            saveDataInfo.buildingsCount
-          }}本、橋脚{{ saveDataInfo.piersCount }}本
+        <div v-if="store.saveDataInfo" class="text-caption text-medium-emphasis mx-2">
+          最終自動保存: {{ new Date(store.saveDataInfo.timestamp).toLocaleString() }}<br />
+          線路{{ store.saveDataInfo.railsCount }}本、木{{ store.saveDataInfo.treesCount }}本、ビル{{
+            store.saveDataInfo.buildingsCount
+          }}本、橋脚{{ store.saveDataInfo.piersCount }}本
         </div>
         <div v-else class="text-caption text-medium-emphasis mx-2">まだ自動保存されていません</div>
       </v-col>
@@ -220,8 +238,8 @@
       <v-col cols="6">
         <v-btn
           color="success"
-          @click="$emit('handleSaveManual1')"
-          :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+          @click="handleSaveManual1()"
+          :disabled="store.rails.length === 0 && store.trees.length === 0 && store.buildings.length === 0 && store.piers.length === 0"
           block
           class="mb-2"
         >
@@ -232,8 +250,8 @@
       <v-col cols="6">
         <v-btn
           color="success"
-          @click="$emit('handleSaveManual2')"
-          :disabled="rails.length === 0 && trees.length === 0 && buildings.length === 0 && piers.length === 0"
+          @click="handleSaveManual2()"
+          :disabled="store.rails.length === 0 && store.trees.length === 0 && store.buildings.length === 0 && store.piers.length === 0"
           block
           class="mb-2"
         >
@@ -242,13 +260,13 @@
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="orange" @click="$emit('handleLoadManual1')" :disabled="!hasManualSave1" block class="mb-2">
+        <v-btn color="orange" @click="handleLoadManual1()" :disabled="!storage.hasManual1()" block class="mb-2">
           <v-icon size="small">mdi-upload</v-icon>
           <span class="text-caption">復元1</span>
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="orange" @click="$emit('handleLoadManual2')" :disabled="!hasManualSave2" block class="mb-2">
+        <v-btn color="orange" @click="handleLoadManual2()" :disabled="!storage.hasManual2()" block class="mb-2">
           <v-icon size="small">mdi-upload</v-icon>
           <span class="text-caption">復元2</span>
         </v-btn>
@@ -273,107 +291,42 @@
 
 <script setup lang="ts">
 import { computed, watch } from "vue";
-import type { Rail } from "../../types/rail";
+import { useGameStore } from "../../stores/game";
+import { useStorageStore } from "../../stores/storage";
+import { useUndoRedo } from "../../composables/useUndoRedo";
+import { usePresets } from "../../composables/usePresets";
+import { useSaveLoad } from "../../composables/useSaveLoad";
 
-interface Props {
-  selectedTool:
-    | "none"
-    | "straight"
-    | "curve"
-    | "slope"
-    | "curve-slope-up"
-    | "curve-slope-down"
-    | "tree"
-    | "building"
-    | "pier"
-    | "station"
-    | "crossing"
-    | "delete";
-  currentTitle: string;
-  rails: Rail[];
-  trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
-  buildings: {
-    position: [number, number, number];
-    height?: number;
-    color?: string;
-    rotation?: [number, number, number];
-  }[];
-  piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
-  isRailsLocked: boolean;
-  saveDataInfo: any;
-  hasManualSave1: boolean;
-  hasManualSave2: boolean;
-  manualSaveInfo1: any;
-  manualSaveInfo2: any;
-  lastPointer: { x: number; z: number } | null;
-  ghostRail: Rail | null;
-  ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
-}
+const store = useGameStore();
+const storageStore = useStorageStore();
 
-const props = defineProps<Props>();
+const { handleUndo, handleRedo } = useUndoRedo();
+const {
+  createOvalPreset,
+  createSCurvePreset,
+  createSlopeUpDownCurvesPreset,
+  loadCurveSlopePreset,
+} = usePresets();
+const {
+  storage,
+  clearAllRails,
+  handleSaveManual1,
+  handleSaveManual2,
+  handleLoadManual1,
+  handleLoadManual2,
+} = useSaveLoad();
 
-const emit = defineEmits<{
-  "update:selectedTool": [
-    value:
-      | "none"
-      | "straight"
-      | "curve"
-      | "slope"
-      | "curve-slope-up"
-      | "curve-slope-down"
-      | "tree"
-      | "building"
-      | "pier"
-      | "station"
-      | "crossing"
-      | "delete"
-  ];
-  "update:currentTitle": [value: string];
-  createOvalPreset: [];
-  createSCurvePreset: [];
-  createSlopeUpDownCurvesPreset: [];
-  loadCurveSlopePreset: [];
-  clearAllRails: [];
-  handleSaveManual1: [];
-  handleSaveManual2: [];
-  handleLoadManual1: [];
-  handleLoadManual2: [];
-}>();
-
-// v-model bridge for selectedTool
-const selectedToolProxy = computed({
-  get: () => props.selectedTool,
-  set: (
-    v:
-      | "none"
-      | "straight"
-      | "curve"
-      | "slope"
-      | "curve-slope-up"
-      | "curve-slope-down"
-      | "tree"
-      | "building"
-      | "pier"
-      | "station"
-      | "crossing"
-      | "delete"
-  ) => emit("update:selectedTool", v),
-});
-
-// v-model bridge for currentTitle
-const titleProxy = computed({
-  get: () => props.currentTitle,
-  set: (v: string) => emit("update:currentTitle", v),
-});
+const manualSaveInfo1 = computed(() => storageStore.getManualInfo1());
+const manualSaveInfo2 = computed(() => storageStore.getManualInfo2());
 
 // 周回状態になった時に線路配置ツールが選択されていたら自動的に木に切り替える
 watch(
-  () => props.isRailsLocked,
+  () => store.isRailsLocked,
   (isLocked) => {
     if (isLocked) {
       const railTools = ["straight", "curve", "slope", "curve-slope-up", "curve-slope-down", "station", "crossing"];
-      if (railTools.includes(props.selectedTool)) {
-        emit("update:selectedTool", "tree");
+      if (railTools.includes(store.selectedTool)) {
+        store.selectedTool = "tree";
       }
     }
   }

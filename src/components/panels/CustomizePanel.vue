@@ -39,19 +39,19 @@
     <v-card-subtitle>プリセット</v-card-subtitle>
     <v-row dense>
       <v-col cols="6">
-        <v-btn color="primary" @click="$emit('applyPreset', 'default')" block class="mb-2">
+        <v-btn color="primary" @click="applyPreset('default')" block class="mb-2">
           <v-icon size="small">mdi-restore</v-icon>
           <span class="text-caption">デフォルト</span>
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="secondary" @click="$emit('applyPreset', 'red')" block class="mb-2">
+        <v-btn color="secondary" @click="applyPreset('red')" block class="mb-2">
           <v-icon size="small">mdi-palette</v-icon>
           <span class="text-caption">赤い電車</span>
         </v-btn>
       </v-col>
       <v-col cols="6">
-        <v-btn color="success" @click="$emit('applyPreset', 'green')" block class="mb-2">
+        <v-btn color="success" @click="applyPreset('green')" block class="mb-2">
           <v-icon size="small">mdi-palette</v-icon>
           <span class="text-caption">緑の電車</span>
         </v-btn>
@@ -62,41 +62,63 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-interface TrainCustomization {
-  bodyColor: string;
-  roofColor: string;
-  windowColor: string;
-  wheelColor: string;
-}
+import { useGameStore } from "../../stores/game";
 
-interface Props {
-  trainCustomization: TrainCustomization;
-}
-
-const props = defineProps<Props>();
-
-const emit = defineEmits<{
-  "update:trainCustomization": [value: TrainCustomization];
-  applyPreset: [preset: "default" | "red" | "green"];
-}>();
+const store = useGameStore();
 
 // v-model bridges for each field
 const bodyColor = computed({
-  get: () => props.trainCustomization.bodyColor,
-  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, bodyColor: v }),
+  get: () => store.trainCustomization.bodyColor,
+  set: (v: string) => { store.trainCustomization = { ...store.trainCustomization, bodyColor: v }; },
 });
 const roofColor = computed({
-  get: () => props.trainCustomization.roofColor,
-  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, roofColor: v }),
+  get: () => store.trainCustomization.roofColor,
+  set: (v: string) => { store.trainCustomization = { ...store.trainCustomization, roofColor: v }; },
 });
 const windowColor = computed({
-  get: () => props.trainCustomization.windowColor,
-  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, windowColor: v }),
+  get: () => store.trainCustomization.windowColor,
+  set: (v: string) => { store.trainCustomization = { ...store.trainCustomization, windowColor: v }; },
 });
 const wheelColor = computed({
-  get: () => props.trainCustomization.wheelColor,
-  set: (v: string) => emit("update:trainCustomization", { ...props.trainCustomization, wheelColor: v }),
+  get: () => store.trainCustomization.wheelColor,
+  set: (v: string) => { store.trainCustomization = { ...store.trainCustomization, wheelColor: v }; },
 });
+
+const applyPreset = (preset: "default" | "red" | "green") => {
+  switch (preset) {
+    case "default":
+      store.trainCustomization = {
+        bodyColor: "#2E86C1",
+        roofColor: "#1B4F72",
+        windowColor: "#85C1E9",
+        frontWindowColor: "#F7DC6F",
+        wheelColor: "#2C2C2C",
+      };
+      break;
+    case "red":
+      store.trainCustomization = {
+        bodyColor: "#E74C3C",
+        roofColor: "#B71C1C",
+        windowColor: "#FFCDD2",
+        frontWindowColor: "#FAD7A0",
+        wheelColor: "#424242",
+      };
+      break;
+    case "green":
+      store.trainCustomization = {
+        bodyColor: "#27AE60",
+        roofColor: "#1B5E20",
+        windowColor: "#C8E6C9",
+        frontWindowColor: "#D5F5E3",
+        wheelColor: "#2E2E2E",
+      };
+      break;
+  }
+  store.showNotification(
+    `${preset === "default" ? "デフォルト" : preset === "red" ? "赤い電車" : "緑の電車"}プリセットを適用しました`,
+    "success"
+  );
+};
 </script>
 
 <style scoped>

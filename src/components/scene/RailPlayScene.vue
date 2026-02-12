@@ -151,12 +151,15 @@
 <script setup lang="ts">
 import { TresCanvas } from "@tresjs/core";
 import { shallowRef, onMounted } from "vue";
+import { storeToRefs } from "pinia";
 import { OrbitControls, Sky } from "@tresjs/cientos";
 import RailSegment from "../rail/RailSegment.vue";
 import Train from "../train/Train.vue";
 import SceneryTree from "../scenery/SceneryTree.vue";
 import SceneryBuilding from "../scenery/SceneryBuilding.vue";
 import SceneryPier from "../scenery/SceneryPier.vue";
+import { useGameStore } from "../../stores/game";
+import { AREA_LIMIT } from "../../constants/area";
 import type { Rail } from "../../types/rail";
 
 interface ClickEvent {
@@ -167,55 +170,25 @@ interface ClickEvent {
   point?: { x: number; y: number; z: number };
 }
 
-// Props
-interface Props {
-  // カメラ関連
-  cameraPosition: [number, number, number];
-  cameraRotation: [number, number, number];
-  cameraMode: "orbit" | "front" | "follow";
-  followTarget: [number, number, number];
+const store = useGameStore();
+const {
+  cameraPosition,
+  cameraRotation,
+  cameraMode,
+  followTarget,
+  rails,
+  trees,
+  buildings,
+  piers,
+  carTransforms,
+  trainCustomization,
+  ghostRail,
+  ghostTree,
+  ghostBuilding,
+  ghostPier,
+  pierCandidates,
+} = storeToRefs(store);
 
-  // ゲームオブジェクト
-  rails: Rail[];
-  trees: { position: [number, number, number]; rotation?: [number, number, number] }[];
-  buildings: {
-    position: [number, number, number];
-    height?: number;
-    color?: string;
-    rotation?: [number, number, number];
-  }[];
-  piers: { position: [number, number, number]; height?: number; rotation?: [number, number, number] }[];
-
-  // 列車関連
-  carTransforms: { position: [number, number, number]; rotation: [number, number, number] }[];
-  trainCustomization: {
-    bodyColor: string;
-    roofColor: string;
-    windowColor: string;
-    frontWindowColor: string;
-    wheelColor: string;
-  };
-
-  // ゴースト関連
-  ghostRail: Rail | null;
-  ghostTree: { position: [number, number, number]; rotation?: [number, number, number] } | null;
-  ghostBuilding: {
-    position: [number, number, number];
-    height?: number;
-    color?: string;
-    rotation?: [number, number, number];
-  } | null;
-  ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
-  pierCandidates: Array<{
-    position: [number, number, number];
-    height: number;
-    rotation: [number, number, number];
-  }>;
-}
-
-import { AREA_LIMIT } from "../../constants/area";
-
-const props = defineProps<Props>();
 const cameraRef = shallowRef<any>(null);
 
 // Emits
@@ -259,7 +232,7 @@ let lastX = 0;
 let lastY = 0;
 const onPointerDown = (e: PointerEvent) => {
   // OrbitControls が無効なとき（= front）だけドラッグで視点操作
-  if ((props as any).cameraMode !== "front") return;
+  if (cameraMode.value !== "front") return;
   dragging = true;
   lastX = e.clientX;
   lastY = e.clientY;
