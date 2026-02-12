@@ -137,6 +137,24 @@
 
     <v-divider class="my-4" />
 
+    <v-card-subtitle>履歴操作</v-card-subtitle>
+    <v-row dense class="pa-2">
+      <v-col cols="6">
+        <v-btn color="info" @click="$emit('handleUndo')" :disabled="!canUndo" block class="mb-2">
+          <v-icon size="small">mdi-undo</v-icon>
+          <span class="text-caption">元に戻す (Ctrl+Z)</span>
+        </v-btn>
+      </v-col>
+      <v-col cols="6">
+        <v-btn color="info" @click="$emit('handleRedo')" :disabled="!canRedo" block class="mb-2">
+          <v-icon size="small">mdi-redo</v-icon>
+          <span class="text-caption">やり直す (Ctrl+Shift+Z)</span>
+        </v-btn>
+      </v-col>
+    </v-row>
+
+    <v-divider class="my-4" />
+
     <v-text-field
       v-model="titleProxy"
       label="作成中の線路にタイトルを設定"
@@ -308,6 +326,8 @@ interface Props {
   lastPointer: { x: number; z: number } | null;
   ghostRail: Rail | null;
   ghostPier: { position: [number, number, number]; height?: number; rotation?: [number, number, number] } | null;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const props = defineProps<Props>();
@@ -338,6 +358,8 @@ const emit = defineEmits<{
   handleSaveManual2: [];
   handleLoadManual1: [];
   handleLoadManual2: [];
+  handleUndo: [];
+  handleRedo: [];
 }>();
 
 // v-model bridge for selectedTool

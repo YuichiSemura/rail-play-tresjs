@@ -84,6 +84,8 @@
             :last-pointer="lastPointer"
             :ghost-rail="ghostRail"
             :ghost-pier="ghostPier"
+            :can-undo="canUndo"
+            :can-redo="canRedo"
             @createOvalPreset="createOvalPreset"
             @createSCurvePreset="createSCurvePreset"
             @createSlopeUpDownCurvesPreset="createSlopeUpDownCurvesPreset"
@@ -93,6 +95,8 @@
             @handleSaveManual2="handleSaveManual2"
             @handleLoadManual1="handleLoadManual1"
             @handleLoadManual2="handleLoadManual2"
+            @handleUndo="handleUndo"
+            @handleRedo="handleRedo"
           />
 
           <RunPanel
@@ -155,6 +159,7 @@ import { useRailsGeometry } from "../composables/useRailsGeometry";
 import { useGhostPreview } from "../composables/useGhostPreview";
 import { useTrainRunner } from "../composables/useTrainRunner";
 import { useCameraController } from "../composables/useCameraController";
+import { useHistory, type HistoryState } from "../composables/useHistory";
 import RailPlayScene from "./scene/RailPlayScene.vue";
 import BuildPanel from "./panels/BuildPanel.vue";
 import RunPanel from "./panels/RunPanel.vue";
@@ -246,6 +251,7 @@ const trainCustomization = ref<TrainCustomization>({
 // ヘルプモーダルの状態管理
 const helpDialog = ref(false);
 const isRailsLocked = ref(false);
+const isRestoring = ref(false);
 
 // クリックイベントの重複処理を防ぐためのデバウンス
 const lastClickTime = ref(0);
@@ -264,6 +270,18 @@ const {
   updateFrontLook,
   endFrontLook,
 } = useCameraController();
+
+// 履歴管理（Undo/Redo）
+const {
+  canUndo,
+  canRedo,
+  pushHistory,
+  undo,
+  redo,
+  saveCurrentForRedo,
+  saveCurrentForUndo,
+  clearHistory,
+} = useHistory(50); // 最大50ステップの履歴
 
 // 幾何ロジック（切り出し）
 const {
@@ -512,11 +530,82 @@ const {
   getPlacementRotation,
 } = useGhostPreview(rails, selectedTool, gameMode, createRail);
 
+// 履歴管理のためのヘルパー関数
+const getCurrentState = (): HistoryState => {
+  return {
+    rails: rails.value,
+    trees: trees.value,
+    buildings: buildings.value,
+    piers: piers.value,
+    gameMode: gameMode.value,
+    isRailsLocked: isRailsLocked.value,
+    currentTitle: currentTitle.value,
+  };
+};
+
+const restoreState = (state: HistoryState) => {
+  rails.value = state.rails;
+  trees.value = state.trees;
+  buildings.value = state.buildings;
+  piers.value = state.piers;
+  gameMode.value = state.gameMode;
+  isRailsLocked.value = state.isRailsLocked;
+  currentTitle.value = state.currentTitle;
+};
+
+// 操作履歴に追加（状態変更操作の前に呼ぶ）
+const saveToHistory = () => {
+  pushHistory(getCurrentState());
+};
+
+// Undo操作
+const handleUndo = () => {
+  if (!canUndo.value || gameMode.value !== "build") return;
+
+  // 現在の状態をredoスタックに保存してからundoを実行
+  const currentState = getCurrentState();
+  saveCurrentForRedo(currentState);
+
+  const previousState = undo();
+
+  if (previousState) {
+    isRestoring.value = true;
+    restoreState(previousState);
+    isRestoring.value = false;
+    resetGhosts();
+    resetToOrbit();
+    trainKey.value++;
+    showNotification("操作を元に戻しました", "success");
+  }
+};
+
+// Redo操作
+const handleRedo = () => {
+  if (!canRedo.value || gameMode.value !== "build") return;
+
+  // 現在の状態をundoスタックに保存してからredoを実行
+  const currentState = getCurrentState();
+  saveCurrentForUndo(currentState);
+
+  const nextState = redo();
+
+  if (nextState) {
+    isRestoring.value = true;
+    restoreState(nextState);
+    isRestoring.value = false;
+    resetGhosts();
+    resetToOrbit();
+    trainKey.value++;
+    showNotification("操作をやり直しました", "success");
+  }
+};
+
 const addTreeAt = (x: number, z: number) => {
   const px = snapToGridSize(x, 1);
   const pz = snapToGridSize(z, 1);
   // 同座標重複を軽減
   if (!trees.value.some((t) => Math.hypot(t.position[0] - px, t.position[2] - pz) < 0.1)) {
+    saveToHistory();
     trees.value.push({ position: [px, 0, pz], rotation: [0, getPlacementRotation(), 0] });
   }
 };
@@ -529,6 +618,7 @@ const addBuildingAt = (x: number, z: number) => {
     const palette = ["#7FB3D5", "#85C1E9", "#5DADE2", "#A9CCE3", "#5499C7"];
     const color = palette[Math.floor(Math.random() * palette.length)];
     const height = 1.5 + Math.floor(Math.random() * 3) * 0.6;
+    saveToHistory();
     buildings.value.push({ position: [px, 0, pz], height, color, rotation: [0, getPlacementRotation(), 0] });
   }
 };
@@ -556,12 +646,12 @@ const addPierAt = (x: number, z: number) => {
 
   // 橋脚を配置
   const pierHeight = Math.max(0.7, nearestCandidate.railHeight);
+  saveToHistory();
   piers.value.push({
     position: nearestCandidate.position,
     height: pierHeight,
     rotation: [0, nearestCandidate.rotation, 0],
   });
-
   showNotification("橋脚を配置しました", "success");
 };
 
@@ -575,6 +665,7 @@ const addStationAt = (x: number, z: number) => {
   );
 
   if (!isDuplicate) {
+    saveToHistory();
     rails.value.push(newRail);
     // 周回チェック
     isLoopComplete();
@@ -688,6 +779,7 @@ const onPlaneClick = (event: ClickEvent) => {
         }
       }
     }
+    saveToHistory();
     rails.value.push(newRail);
     return;
   }
@@ -709,6 +801,7 @@ const onPlaneClick = (event: ClickEvent) => {
       (r) => Math.hypot(r.position[0] - newRail.position[0], r.position[2] - newRail.position[2]) < 0.1
     );
     if (!isDuplicate) {
+      saveToHistory();
       rails.value.push(newRail);
       isLoopComplete();
     }
@@ -759,6 +852,7 @@ const onRailClick = (rail: Rail) => {
     if (index > -1) {
       // 先頭または最後のレールのみ削除可能
       if (index === 0 || index === rails.value.length - 1) {
+        saveToHistory();
         rails.value.splice(index, 1);
         // 削除後にロック状態をリセット
         if (isRailsLocked.value) {
@@ -775,6 +869,7 @@ const onRailClick = (rail: Rail) => {
 const onTreeClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
+    saveToHistory();
     trees.value.splice(index, 1);
   }
 };
@@ -782,6 +877,7 @@ const onTreeClick = (index: number) => {
 const onBuildingClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
+    saveToHistory();
     buildings.value.splice(index, 1);
   }
 };
@@ -789,6 +885,7 @@ const onBuildingClick = (index: number) => {
 const onPierClick = (index: number) => {
   if (gameMode.value !== "build") return;
   if (selectedTool.value === "delete") {
+    saveToHistory();
     piers.value.splice(index, 1);
   }
 };
@@ -853,6 +950,8 @@ const loadCurveSlopePreset = async () => {
 
     const totalItems = rails.value.length + trees.value.length + buildings.value.length + piers.value.length;
     showNotification(`曲線スローププリセットを読み込みました（${totalItems}個のオブジェクト）`, "success");
+    // プリセット読み込み時は履歴をクリア
+    clearHistory();
   } catch (error) {
     console.error("プリセット読み込みエラー:", error);
     showNotification("プリセットの読み込みに失敗しました", "error");
@@ -885,6 +984,8 @@ const clearAllRails = () => {
   trainKey.value++;
   // 自由視点へ戻す
   resetToOrbit();
+  // 履歴をクリア（全クリアの場合は履歴もリセット）
+  clearHistory();
 };
 
 // ゲームデータの保存・復元機能（Pinia ストア利用）
@@ -1210,6 +1311,7 @@ const applyPreset = (preset: "default" | "red" | "green") => {
 
 // オーバル（1直線 + 左半円 + 1直線 + 左半円 = 計10本）プリセット生成
 const createOvalPreset = (straightLength?: number) => {
+  saveToHistory();
   rails.value = [];
   isRailsLocked.value = false;
   gameMode.value = "build";
@@ -1250,6 +1352,7 @@ const createOvalPreset = (straightLength?: number) => {
 
 // 左→右の S 字（向きデバッグ用、ループしない）
 const createSCurvePreset = () => {
+  saveToHistory();
   rails.value = [];
   trees.value = [];
   buildings.value = [];
@@ -1345,6 +1448,7 @@ const createSCurvePreset = () => {
 
 // 坂上り→坂下り→カーブx4→坂上り→坂下り→カーブx4（ループ）
 const createSlopeUpDownCurvesPreset = () => {
+  saveToHistory();
   rails.value = [];
   isRailsLocked.value = false;
   gameMode.value = "build";
@@ -1400,6 +1504,7 @@ watch(gameMode, () => {
 watch(
   () => rails.value.length,
   () => {
+    if (isRestoring.value) return;
     updateGhost();
     updatePierCandidates();
   }
@@ -1412,8 +1517,22 @@ watch(gameMode, (mode, prev) => {
   }
 });
 
-// キーボードショートカット（回転）
+// キーボードショートカット（回転、Undo/Redo）
 const onKeyDown = (e: KeyboardEvent) => {
+  // Undo: Ctrl+Z (Mac: Cmd+Z)
+  if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+    e.preventDefault();
+    handleUndo();
+    return;
+  }
+
+  // Redo: Ctrl+Shift+Z or Ctrl+Y (Mac: Cmd+Shift+Z or Cmd+Y)
+  if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && e.key === "z") || e.key === "y")) {
+    e.preventDefault();
+    handleRedo();
+    return;
+  }
+
   if (gameMode.value !== "build") return;
   const shift = e.shiftKey;
   if (e.key === "r" || e.key === "R") {
