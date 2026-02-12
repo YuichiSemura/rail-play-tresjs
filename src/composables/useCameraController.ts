@@ -72,18 +72,16 @@ export function useCameraController() {
     cameraRotation.value = [...ORBIT_INITIAL_ROTATION];
   };
 
-  // （旧仕様）カーブ内側固定角度調整は廃止 -> レール終端方向の先読み補間方式に変更
+  // 距離ベース先読み方式: 現在位置から一定距離先の接線方向をサンプリングしてカメラ方向に利用
 
   //　フロントカメラとフォローカメラの処理
   const handleTrainPose = (payload: {
     position: [number, number, number];
     rotation: [number, number, number];
     railType?: string;
-    curveDirection?: string; // 互換性のため残しつつ未使用
+    curveDirection?: string;
     secondCarPosition?: [number, number, number];
-    currentEndYaw?: number; // 現在レールを t=1 まで進んだ場合の接線方向
-    nextEndYaw?: number; // 次レールの終端接線方向（無い場合は undefined）
-    segmentProgress?: number; // 現在レール内進行度 (0-1)
+    lookAheadYaw?: number; // 距離ベース先読みのyaw（カメラ空間: -Math.PI済み）
   }) => {
     // フォローモード: 2両目を注視点として設定
     if (cameraMode.value === "follow" && payload.secondCarPosition) {
@@ -101,42 +99,23 @@ export function useCameraController() {
     const oz = FRONT_OFFSET[0] * Math.sin(yaw) + FRONT_OFFSET[2] * Math.cos(yaw);
     const targetPos: [number, number, number] = [px - ox, py + FRONT_OFFSET[1], pz + oz];
 
-    // 新方式: 現在レール終端方向(currentEndYaw) と 次レール終端方向(nextEndYaw) を利用した先読み補間
-    // currentEndYaw / nextEndYaw は列車本来の yaw 系（後で rotation[1]-Math.PI を使っているため、同じ基準に合わせる）
-    const currentEndYaw = payload.currentEndYaw !== undefined ? payload.currentEndYaw - Math.PI : undefined;
-    const nextEndYawRaw = payload.nextEndYaw !== undefined ? payload.nextEndYaw - Math.PI : undefined;
-    const nextEndYaw = nextEndYawRaw ?? currentEndYaw;
+    // 距離ベース先読み方式: lookAheadYaw は先頭の少し前方の接線方向（カメラ空間）
+    const LOOK_AHEAD_BLEND = 0.6; // 先読み方向へのブレンド率 (0=なし, 1=完全)
+    const BLENDED_YAW_SMOOTH = 0.12; // スムージング係数（大きいほど追従が速い）
 
-    // （新）レール一本を使ってゆっくり方向転換: segmentProgress で先読み寄せを制御
-    const tSeg = clamp(payload.segmentProgress ?? 0, 0, 1);
-    // easeInOut (smoothstep) で序盤ゆっくり終盤加速
-    const ease = tSeg * tSeg * (3 - 2 * tSeg);
-    const MAX_LOOK_AHEAD_BLEND = 0.85; // 終端で最大どれだけ次レール終端方向へ寄せるか
-    const dynamicLookAheadBlend = MAX_LOOK_AHEAD_BLEND * ease;
-
-    let lookAheadYaw: number | undefined;
-    if (currentEndYaw !== undefined && nextEndYaw !== undefined) {
-      let delta = nextEndYaw - currentEndYaw;
-      while (delta > Math.PI) delta -= Math.PI * 2;
-      while (delta < -Math.PI) delta += Math.PI * 2;
-      lookAheadYaw = currentEndYaw + delta * dynamicLookAheadBlend;
-    }
-
-    const CAMERA_YAW_BLEND = 1.2; // 現在接線 yaw と look-ahead のブレンド（1未満で過剰先行を防止）
     let blendedYaw = yaw;
-    if (lookAheadYaw !== undefined) {
-      let dy = lookAheadYaw - yaw;
+    if (payload.lookAheadYaw !== undefined) {
+      let dy = payload.lookAheadYaw - yaw;
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
-      blendedYaw = yaw + dy * CAMERA_YAW_BLEND; // 先読み方向へ寄せる
+      blendedYaw = yaw + dy * LOOK_AHEAD_BLEND;
     }
 
-    // 追加スムージング（レール境界で blendedYaw が急変しないように）
-    const BLENDED_YAW_SMOOTH = 0.05;
+    // スムージング（急激な方向変化を抑制）
     if ((handleTrainPose as any)._smoothedYaw === undefined) {
       (handleTrainPose as any)._smoothedYaw = blendedYaw;
     } else {
-      let prev = (handleTrainPose as any)._smoothedYaw as number;
+      const prev = (handleTrainPose as any)._smoothedYaw as number;
       let d = blendedYaw - prev;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
