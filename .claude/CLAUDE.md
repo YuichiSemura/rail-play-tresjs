@@ -1,98 +1,93 @@
 # CLAUDE.md
 
-このファイルは AI（Claude/Copilot など）にプロジェクトの意図と前提を伝えるための開発ノートです。
+3D rail-building game — TresJS + Vue 3 + Vuetify.
 
-## プロジェクト概要
+## Commands
 
-レールあそびアプリ — TresJS + Vue + Vuetify で作る 3D レール配置ゲーム。
+- `npm run dev` — Vite dev server
+- `npm run build` — `vue-tsc && vite build`
+- `npm run lint` — `biome lint src/`
+- `npm run format` — `biome format . --write`
 
-## 現状の機能（抜粋）
+## Conventions
 
-### レール系統
+- TypeScript + Vue 3 SFC, Biome lint/format, vue-tsc type check, Vuetify 3
+- Branch: `feat/<summary>` or `fix/<summary>`
+- Small commits, Japanese messages OK
+- PR: summarize changes and verification steps
 
-- レール配置（直線、カーブ（左右）、スロープ、曲線スロープ（上り・下り））
-- 駅ホーム、踏切の配置
-- エリア制限（床下配置防止、高さ制限）
-- プリセット線路生成（円、オーバル、S字カーブ、スロープ付きオーバル）
+## Architecture
 
-### 電車・運行
+### State Management
 
-- 電車運行（複数車両、先頭カメラビュー対応）
-- 電車カスタマイズモード（色変更、プリセット対応）
-- スロープでの滑らかな高度変化（ease-in-out補間）
+- `useGameStore` (Pinia Setup Store) — single source of truth for all game state
+- `useStorageStore` (Pinia Options Store) — localStorage I/O
+- All composables and child components import store directly — **zero props** pattern
+- Components use `useGameStore()` + `storeToRefs()`, no prop drilling
 
-### 景観・建築
+### Key Components
 
-- 木、建物、橋脚の配置
-- **橋脚スマートスナップ機能**：線路接続点への自動配置、候補点の可視化
-- 曲線スロープでの正確な橋脚角度計算（π/2倍数にスナップ）
+- `RailPlayGame.vue` — orchestrator, holds `createRail` function
+- `RailPlayScene.vue` — 3D scene rendering (0 props, emits events)
+- `BuildPanel.vue` / `RunPanel.vue` / `CustomizePanel.vue` / `HelpDialog.vue` — all 0 props
 
-### UI・操作性
+### Composables
 
-- ゴーストプレビュー機能（レール、建物、橋脚候補表示）
-- キーボードショートカット（R/E: 回転、Q: リセット、ESC: ツール解除）
-- 手動保存・復元機能（2スロット対応）
-- 自動保存機能
+- `useRailsGeometry()` — pure geometry/placement utilities
+- `useGhostPreview(createRail)` — ghost preview + smart snap (1 param)
+- `useTrainRunner()` — train physics, watches `store.trainKey` for reset
+- `useCameraController()` — camera modes: orbit / front / follow
+- `useUndoRedo()` — save/undo/redo (build mode only, max 50 states)
+- `useSaveLoad()` — auto-save (1.5s debounce), manual save (2 slots)
+- `usePresets()` — preset track generators (oval, S-curve, slope, curve-slope)
 
-### 技術基盤
+### Types
 
-- TresJS/Three.js による 3D シーン
-- Biome による Lint/Format、vue-tsc による型チェック
-- パフォーマンス最適化（不要な再計算防止）
+- `types/rail.ts` — `Rail` union: Straight | Slope | Curve | CurveSlope | Station | Crossing
+- `types/gameObjects.ts` — `ToolType` (12 values), `HistoryState`, `TreeData`, `BuildingData`, `PierData`
+- `types/common.ts` — `Vec3`, `GameMode`, `Pose`, `CarPose`
 
-## 最近の改善（完了済み）
+### Coordinate System
 
-- ✅ 曲線下りスロープの床下配置防止
-- ✅ 橋脚スマートスナップ機能の実装
-- ✅ 橋脚角度計算の修正（曲線スロープ対応）
-- ✅ パフォーマンス最適化（橋脚候補生成の効率化）
+- Three.js standard: X = east/west, Y = up, Z = north/south
+- Rotation: Y-axis yaw, 45-degree snap for placement
+- Grid snap: 1 unit; area limit: 25 units (`constants/area.ts`)
 
-## 優先 TODO（開発メモ）
+## Gotchas
 
-- 削除したオブジェクトがキャンバスに残るバグの解消
-- 景観の増加（信号機、標識など）
-- 線路接続の自動検証・修正機能
+### CameraMode type divergence
 
-## コーディング規約
+- `types/common.ts` defines `CameraMode = "orbit" | "front"` (stale, 2 modes)
+- `stores/game.ts` defines `CameraMode = "orbit" | "front" | "follow"` (correct, 3 modes)
+- Always import `CameraMode` from `stores/game.ts`
 
-- 言語: TypeScript + Vue 3（SFC）
-- Lint/Format: Biome（`npm run lint`, `npm run format`）
-- 型チェック: `vue-tsc`（`npm run build` 内で実行）
-- UI: Vuetify 3（必要に応じて拡張）
+### createRail location
 
-## アーキテクチャ
+- `createRail` lives in `RailPlayGame.vue`, not in a composable
+- Cannot be moved due to circular dependency with `useGhostPreview`
 
-### 主要コンポーネント
+### Undo/Redo constraints
 
-- `RailPlayGame.vue`: メインゲーム画面、状態管理
-- `RailPlayScene.vue`: Three.js 3Dシーン描画
-- `useRailsGeometry.ts`: レール幾何計算・配置可能性判定
-- `useGhostPreview.ts`: ゴーストプレビューとスマートスナップ
-- `useTrainRunner.ts`: 電車の物理運動計算
-- `useCameraController.ts`: カメラ制御（軌道・先頭視点）
+- Only works in build mode (silently ignored in run/customize)
+- Max 50 history states; deep-copies state via `JSON.parse(JSON.stringify())`
+- Keyboard: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
 
-### 座標系
+### Rail placement rules
 
-- X軸: 東西方向、Z軸: 南北方向、Y軸: 高さ方向
-- Three.js座標系に準拠、回転角度はY軸周り
-- グリッドスナップ: 1単位（レール配置）、任意単位（建物配置）
+- Rails can only be deleted from the start or end of the chain
+- Loop detection (`isLoopComplete`) auto-locks rails and switches to run mode
+- Once locked, must clear all to place new rails
+- Slopes: cannot go below Y=0 or above 4.2 (6 × RAIL_SLOPE_RISE)
 
-## 類似プロジェクト
+## Constants Reference
 
-`../lunchNoCohoGaRoulette/` は TresJS + Vue + Vuetify を組み合わせたアプリ。
+- Straight rail: full length 2 (half = 1), thickness 0.4
+- Curve: radius 2, segment 45° (8 curves = full circle)
+- Slope: run 4, rise 0.7; curve-slope rise 0.175
+- Max height: 4.2; area limit: ±25 units
+- Train: 3 cars, scale 0.3, speed range 0.1–8.0×
 
-## 開発/実行
+## Known Issues
 
-- 開発サーバ: `npm run dev`
-- ビルド: `npm run build`
-- プレビュー: `npm run preview`
-
-## PR/ブランチ運用
-
-1. `feat/<短い要約>` または `fix/<短い要約>` のブランチを作成
-2. 小さくまとめてコミット（日本語OK）
-3. PR 作成時に変更点と動作確認内容を簡潔に記載
-
-## ライセンス
-
-MIT
+- Deleted objects may visually remain on canvas (Three.js cleanup issue)
+- `CameraMode` type in `common.ts` is out of sync with `stores/game.ts`
