@@ -1,64 +1,21 @@
-import { ref, type Ref } from "vue";
-import type { Rail, Pose } from "../types/rail";
+import { useGameStore } from "../stores/game";
 import { useRailsGeometry } from "./useRailsGeometry";
 import { CURVE_SEGMENT_ANGLE as CURVE_ANGLE, RAIL_STRAIGHT_HALF_LENGTH, RAIL_SLOPE_RUN } from "../constants/rail";
+import type { Rail, Pose } from "../types/rail";
 
-export interface GhostPreviewState {
-  lastPointer: Ref<{ x: number; z: number } | null>;
-  placementYaw: Ref<number>;
-  ghostRail: Ref<Rail | null>;
-  ghostTree: Ref<{ position: [number, number, number]; rotation?: [number, number, number] } | null>;
-  ghostBuilding: Ref<{
-    position: [number, number, number];
-    height?: number;
-    color?: string;
-    rotation?: [number, number, number];
-  } | null>;
-  ghostPier: Ref<{
-    position: [number, number, number];
-    height?: number;
-    rotation?: [number, number, number];
-  } | null>;
-  pierCandidates: Ref<Array<{
-    position: [number, number, number];
-    height: number;
-    rotation: [number, number, number];
-  }>>;
-}
-
+/**
+ * ゴーストプレビューcomposable
+ * ストアの状態を直接参照し、ゴースト・橋脚候補を管理する
+ */
 export function useGhostPreview(
-  rails: Ref<Rail[]>,
-  selectedTool: Ref<string>,
-  gameMode: Ref<string>,
   createRail: (
     x: number,
     z: number,
     type: "straight" | "curve" | "slope" | "curve-slope-up" | "curve-slope-down" | "station" | "crossing"
   ) => Rail
 ) {
+  const store = useGameStore();
   const { makeLeftCurve, makeRightCurve, makeLeftCurveSlope, makeRightCurveSlope, generatePierCandidates } = useRailsGeometry();
-
-  // State
-  const lastPointer = ref<{ x: number; z: number } | null>(null);
-  const placementYaw = ref(0); // radians
-  const ghostRail = ref<Rail | null>(null);
-  const ghostTree = ref<{ position: [number, number, number]; rotation?: [number, number, number] } | null>(null);
-  const ghostBuilding = ref<{
-    position: [number, number, number];
-    height?: number;
-    color?: string;
-    rotation?: [number, number, number];
-  } | null>(null);
-  const ghostPier = ref<{
-    position: [number, number, number];
-    height?: number;
-    rotation?: [number, number, number];
-  } | null>(null);
-  const pierCandidates = ref<Array<{
-    position: [number, number, number];
-    height: number;
-    rotation: [number, number, number];
-  }>>([]);
 
   // Helper functions
   const snapToGridSize = (position: number, size: number): number => {
@@ -76,24 +33,24 @@ export function useGhostPreview(
   // Public methods
   const rotatePlacement = (deltaSteps: number) => {
     const step = Math.PI / 4;
-    placementYaw.value = clampYawStep(placementYaw.value + deltaSteps * step);
+    store.placementYaw = clampYawStep(store.placementYaw + deltaSteps * step);
     updateGhost();
   };
 
   const resetPlacementRotation = () => {
-    placementYaw.value = 0;
+    store.placementYaw = 0;
     updateGhost();
   };
 
   // 橋脚候補を更新（線路変更時とツール選択時のみ）
   const updatePierCandidates = () => {
-    if (gameMode.value !== "build" || selectedTool.value !== "pier") {
-      pierCandidates.value = [];
+    if (store.gameMode !== "build" || store.selectedTool !== "pier") {
+      store.pierCandidates = [];
       return;
     }
 
-    const candidates = generatePierCandidates(rails.value);
-    pierCandidates.value = candidates.map(candidate => ({
+    const candidates = generatePierCandidates(store.rails);
+    store.pierCandidates = candidates.map(candidate => ({
       position: candidate.position,
       height: Math.max(0.7, candidate.railHeight),
       rotation: [0, candidate.rotation, 0] as [number, number, number]
@@ -102,31 +59,31 @@ export function useGhostPreview(
 
   const updateGhost = () => {
     // ゴーストのみ初期化（橋脚候補は別途管理）
-    ghostRail.value = null;
-    ghostTree.value = null;
-    ghostBuilding.value = null;
-    ghostPier.value = null;
+    store.ghostRail = null;
+    store.ghostTree = null;
+    store.ghostBuilding = null;
+    store.ghostPier = null;
 
-    if (gameMode.value !== "build") return;
+    if (store.gameMode !== "build") return;
 
     // レールのゴースト
     if (
-      selectedTool.value === "straight" ||
-      selectedTool.value === "curve" ||
-      selectedTool.value === "slope" ||
-      selectedTool.value === "curve-slope-up" ||
-      selectedTool.value === "curve-slope-down" ||
-      selectedTool.value === "station" ||
-      selectedTool.value === "crossing"
+      store.selectedTool === "straight" ||
+      store.selectedTool === "curve" ||
+      store.selectedTool === "slope" ||
+      store.selectedTool === "curve-slope-up" ||
+      store.selectedTool === "curve-slope-down" ||
+      store.selectedTool === "station" ||
+      store.selectedTool === "crossing"
     ) {
-      if (rails.value.length === 0) {
-        if (!lastPointer.value) return; // 初回は向き決めに必要
+      if (store.rails.length === 0) {
+        if (!store.lastPointer) return; // 初回は向き決めに必要
         // 初回のみ、placementYaw を反映
-        const desired = clampYawStep(placementYaw.value);
+        const desired = clampYawStep(store.placementYaw);
         const gr = createRail(
-          lastPointer.value.x,
-          lastPointer.value.z,
-          selectedTool.value as
+          store.lastPointer.x,
+          store.lastPointer.z,
+          store.selectedTool as
             | "straight"
             | "curve"
             | "slope"
@@ -177,7 +134,7 @@ export function useGhostPreview(
           // 再生成して一貫性確保
           const pose: Pose = { point: gr.connections.start, theta: base };
           const chosen = dL <= dR ? makeLeftCurve(pose) : makeRightCurve(pose);
-          ghostRail.value = chosen;
+          store.ghostRail = chosen;
           return;
         } else if (gr.type === "curve-slope") {
           // curve-slope-up/curve-slope-downの処理
@@ -194,104 +151,84 @@ export function useGhostPreview(
           const dR = Math.abs(norm(desired - rightYaw));
           // 再生成して一貫性確保
           const pose: Pose = { point: gr.connections.start, theta: base };
-          // selectedTool.valueに応じて上り下りを決定
-          const ascending = selectedTool.value === "curve-slope-up";
+          // selectedTool に応じて上り下りを決定
+          const ascending = store.selectedTool === "curve-slope-up";
           const chosen = dL <= dR ? makeLeftCurveSlope(pose, ascending) : makeRightCurveSlope(pose, ascending);
-          ghostRail.value = chosen;
+          store.ghostRail = chosen;
           return;
         }
-        ghostRail.value = gr;
+        store.ghostRail = gr;
         return;
       }
-      if (selectedTool.value === "straight") {
-        ghostRail.value = createRail(0, 0, "straight");
-      } else if (selectedTool.value === "curve") {
-        if (!lastPointer.value) return;
-        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve");
-      } else if (selectedTool.value === "slope") {
-        if (!lastPointer.value) return;
-        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "slope");
-      } else if (selectedTool.value === "station") {
-        if (!lastPointer.value) return;
-        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "station");
-      } else if (selectedTool.value === "crossing") {
-        if (!lastPointer.value) return;
-        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "crossing");
-      } else if (selectedTool.value === "curve-slope-up") {
-        if (!lastPointer.value) return;
-        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve-slope-up");
-      } else if (selectedTool.value === "curve-slope-down") {
-        if (!lastPointer.value) return;
-        ghostRail.value = createRail(lastPointer.value.x, lastPointer.value.z, "curve-slope-down");
+      if (store.selectedTool === "straight") {
+        store.ghostRail = createRail(0, 0, "straight");
+      } else if (store.selectedTool === "curve") {
+        if (!store.lastPointer) return;
+        store.ghostRail = createRail(store.lastPointer.x, store.lastPointer.z, "curve");
+      } else if (store.selectedTool === "slope") {
+        if (!store.lastPointer) return;
+        store.ghostRail = createRail(store.lastPointer.x, store.lastPointer.z, "slope");
+      } else if (store.selectedTool === "station") {
+        if (!store.lastPointer) return;
+        store.ghostRail = createRail(store.lastPointer.x, store.lastPointer.z, "station");
+      } else if (store.selectedTool === "crossing") {
+        if (!store.lastPointer) return;
+        store.ghostRail = createRail(store.lastPointer.x, store.lastPointer.z, "crossing");
+      } else if (store.selectedTool === "curve-slope-up") {
+        if (!store.lastPointer) return;
+        store.ghostRail = createRail(store.lastPointer.x, store.lastPointer.z, "curve-slope-up");
+      } else if (store.selectedTool === "curve-slope-down") {
+        if (!store.lastPointer) return;
+        store.ghostRail = createRail(store.lastPointer.x, store.lastPointer.z, "curve-slope-down");
       }
       return;
     }
 
     // 木のゴースト
-    if (selectedTool.value === "tree") {
-      if (!lastPointer.value) return;
-      const px = snapToGridSize(lastPointer.value.x, 1);
-      const pz = snapToGridSize(lastPointer.value.z, 1);
-      ghostTree.value = { position: [px, 0, pz], rotation: [0, placementYaw.value, 0] };
+    if (store.selectedTool === "tree") {
+      if (!store.lastPointer) return;
+      const px = snapToGridSize(store.lastPointer.x, 1);
+      const pz = snapToGridSize(store.lastPointer.z, 1);
+      store.ghostTree = { position: [px, 0, pz], rotation: [0, store.placementYaw, 0] };
       return;
     }
 
     // ビルのゴースト（標準色・高さ）
-    if (selectedTool.value === "building") {
-      if (!lastPointer.value) return;
-      const px = snapToGridSize(lastPointer.value.x, 1);
-      const pz = snapToGridSize(lastPointer.value.z, 1);
-      ghostBuilding.value = {
+    if (store.selectedTool === "building") {
+      if (!store.lastPointer) return;
+      const px = snapToGridSize(store.lastPointer.x, 1);
+      const pz = snapToGridSize(store.lastPointer.z, 1);
+      store.ghostBuilding = {
         position: [px, 0, pz],
         height: 1.8,
         color: "#7FB3D5",
-        rotation: [0, placementYaw.value, 0],
+        rotation: [0, store.placementYaw, 0],
       };
       return;
     }
 
-    if (selectedTool.value === "pier") {
-      if (!lastPointer.value) return;
-      const px = snapToGridSize(lastPointer.value.x, 1);
-      const pz = snapToGridSize(lastPointer.value.z, 1);
-      ghostPier.value = { position: [px, 0, pz], height: 0.7, rotation: [0, placementYaw.value, 0] };
+    if (store.selectedTool === "pier") {
+      if (!store.lastPointer) return;
+      const px = snapToGridSize(store.lastPointer.x, 1);
+      const pz = snapToGridSize(store.lastPointer.z, 1);
+      store.ghostPier = { position: [px, 0, pz], height: 0.7, rotation: [0, store.placementYaw, 0] };
       return;
     }
   };
 
   const updatePointer = (x: number, z: number) => {
-    lastPointer.value = { x, z };
+    store.lastPointer = { x, z };
     updateGhost();
   };
 
-  const resetGhosts = () => {
-    ghostRail.value = null;
-    ghostTree.value = null;
-    ghostBuilding.value = null;
-    ghostPier.value = null;
-    pierCandidates.value = [];
-    lastPointer.value = null;
-  };
-
-  const getPlacementRotation = () => placementYaw.value;
+  const getPlacementRotation = () => store.placementYaw;
 
   return {
-    // State
-    lastPointer,
-    placementYaw,
-    ghostRail,
-    ghostTree,
-    ghostBuilding,
-    ghostPier,
-    pierCandidates,
-
-    // Methods
     rotatePlacement,
     resetPlacementRotation,
     updateGhost,
     updatePierCandidates,
     updatePointer,
-    resetGhosts,
     getPlacementRotation,
   };
 }

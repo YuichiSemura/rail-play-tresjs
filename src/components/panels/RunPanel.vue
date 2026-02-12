@@ -1,40 +1,28 @@
 <template>
   <v-card-text>
-    <v-btn color="success" :disabled="!canRunTrain" @click="$emit('toggleTrain')" block class="mb-3">
-      {{ trainRunning ? "停止" : "走らせる" }}
+    <v-btn color="success" :disabled="!store.canRunTrain" @click="toggleTrain" block class="mb-3">
+      {{ store.trainRunning ? "停止" : "走らせる" }}
     </v-btn>
 
-    <v-btn color="secondary" :disabled="!canRunTrain" @click="$emit('toggleCameraMode')" block class="mb-3">
+    <v-btn color="secondary" :disabled="!store.canRunTrain" @click="toggleCameraMode" block class="mb-3">
       <v-icon class="mr-1">{{
-        cameraMode === "orbit" ? "mdi-train" : cameraMode === "front" ? "mdi-camera-enhance" : "mdi-orbit"
+        store.cameraMode === "orbit" ? "mdi-train" : store.cameraMode === "front" ? "mdi-camera-enhance" : "mdi-orbit"
       }}</v-icon>
-      {{ cameraMode === "orbit" ? "先頭カメラ" : cameraMode === "front" ? "車両注視" : "自由視点" }}
+      {{ store.cameraMode === "orbit" ? "先頭カメラ" : store.cameraMode === "front" ? "車両注視" : "自由視点" }}
     </v-btn>
 
-    <v-slider v-model="trainSpeedProxy" :min="0.1" :max="8.0" :step="0.1" label="速度" />
+    <v-slider v-model="store.trainSpeed" :min="0.1" :max="8.0" :step="0.1" label="速度" />
   </v-card-text>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-interface Props {
-  canRunTrain: boolean;
-  trainRunning: boolean;
-  trainSpeed: number;
-  cameraMode: "orbit" | "front" | "follow";
-}
+import { useGameStore } from "../../stores/game";
+import { useCameraController } from "../../composables/useCameraController";
 
-const props = defineProps<Props>();
+const store = useGameStore();
+const { toggleCameraMode } = useCameraController();
 
-const emit = defineEmits<{
-  "update:trainSpeed": [value: number];
-  toggleTrain: [];
-  toggleCameraMode: [];
-}>();
-
-// v-model bridge for trainSpeed
-const trainSpeedProxy = computed({
-  get: () => props.trainSpeed,
-  set: (v: number) => emit("update:trainSpeed", v),
-});
+const toggleTrain = () => {
+  store.trainRunning = !store.trainRunning;
+};
 </script>

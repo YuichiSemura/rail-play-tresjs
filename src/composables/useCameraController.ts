@@ -1,37 +1,36 @@
 import { ref, watch } from "vue";
+import { useGameStore, type CameraMode } from "../stores/game";
 
-export type CameraMode = "orbit" | "front" | "follow";
+export type { CameraMode };
 
+/**
+ * カメラ制御composable
+ * ストアのカメラ状態を読み書きし、補間・先読みロジックを管理する
+ */
 export function useCameraController() {
-  // State
-  const cameraMode = ref<CameraMode>("orbit");
-  const cameraPosition = ref<[number, number, number]>([15, 8, 15]);
-  const cameraRotation = ref<[number, number, number]>([0, 0, 0]);
-  // Front-camera look offsets (pitch: X, yaw: Y)
-  const frontLookPitch = ref(0); // radians
-  const frontLookYaw = ref(0); // radians
+  const store = useGameStore();
+
+  // 内部状態（ストアに含めない）
+  const frontLookPitch = ref(0);
+  const frontLookYaw = ref(0);
   const isFrontLookActive = ref(false);
-  // Follow mode target position (2両目の位置)
-  const followTarget = ref<[number, number, number]>([0, 0, 0]);
 
   // Constants
-  const FRONT_OFFSET: [number, number, number] = [0, 0.15, -0.85]; // ごく少し前寄りから撮る（yは車両高さに加算）
+  const FRONT_OFFSET: [number, number, number] = [0, 0.15, -0.85];
   const CAM_POS_LERP = 0.18;
   const CAM_ROT_LERP = 0.12;
-  const ORBIT_INITIAL_POSITION: [number, number, number] = [15, 8, 15];
-  const ORBIT_INITIAL_ROTATION: [number, number, number] = [0, 0, 0];
-  const MAX_LOOK = Math.PI / 4; // 約45°
-  const LOOK_SENSITIVITY_X = 0.002; // yaw 1px あたりのラジアン
-  const LOOK_SENSITIVITY_Y = 0.002; // pitch 1px あたりのラジアン
+  const MAX_LOOK = Math.PI / 4;
+  const LOOK_SENSITIVITY_X = 0.002;
+  const LOOK_SENSITIVITY_Y = 0.002;
 
   // Helper functions
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-  const lerp3 = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
-    lerp(a[0], b[0], t),
-    lerp(a[1], b[1], t),
-    lerp(a[2], b[2], t),
-  ];
+  const lerp3 = (
+    a: [number, number, number],
+    b: [number, number, number],
+    t: number,
+  ): [number, number, number] => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
   const angleLerp = (current: number, target: number, t: number) => {
     let delta = target - current;
@@ -46,10 +45,12 @@ export function useCameraController() {
     isFrontLookActive.value = true;
   };
   const updateFrontLook = (dx: number, dy: number) => {
-    // dx: 水平ドラッグ（右+）、dy: 垂直ドラッグ（下+）
-    // 上へドラッグ（dy<0）でカメラを上に向けるため、pitch は dy をそのまま加算（負方向へ）
     frontLookYaw.value = clamp(frontLookYaw.value + dx * LOOK_SENSITIVITY_X, -MAX_LOOK, MAX_LOOK);
-    frontLookPitch.value = clamp(frontLookPitch.value + dy * LOOK_SENSITIVITY_Y, -MAX_LOOK, MAX_LOOK);
+    frontLookPitch.value = clamp(
+      frontLookPitch.value + dy * LOOK_SENSITIVITY_Y,
+      -MAX_LOOK,
+      MAX_LOOK,
+    );
   };
   const endFrontLook = () => {
     isFrontLookActive.value = false;
@@ -57,19 +58,13 @@ export function useCameraController() {
 
   // Public methods
   const toggleCameraMode = () => {
-    if (cameraMode.value === "orbit") {
-      cameraMode.value = "front";
-    } else if (cameraMode.value === "front") {
-      cameraMode.value = "follow";
+    if (store.cameraMode === "orbit") {
+      store.cameraMode = "front";
+    } else if (store.cameraMode === "front") {
+      store.cameraMode = "follow";
     } else {
-      cameraMode.value = "orbit";
+      store.cameraMode = "orbit";
     }
-  };
-
-  const resetToOrbit = () => {
-    cameraMode.value = "orbit";
-    cameraPosition.value = [...ORBIT_INITIAL_POSITION];
-    cameraRotation.value = [...ORBIT_INITIAL_ROTATION];
   };
 
   // 距離ベース先読み方式: 現在位置から一定距離先の接線方向をサンプリングしてカメラ方向に利用
@@ -81,27 +76,27 @@ export function useCameraController() {
     railType?: string;
     curveDirection?: string;
     secondCarPosition?: [number, number, number];
-    lookAheadYaw?: number; // 距離ベース先読みのyaw（カメラ空間: -Math.PI済み）
+    lookAheadYaw?: number;
   }) => {
     // フォローモード: 2両目を注視点として設定
-    if (cameraMode.value === "follow" && payload.secondCarPosition) {
-      followTarget.value = payload.secondCarPosition;
+    if (store.cameraMode === "follow" && payload.secondCarPosition) {
+      store.followTarget = payload.secondCarPosition;
       return;
     }
 
-    if (cameraMode.value !== "front") return;
+    if (store.cameraMode !== "front") return;
 
     const [px, py, pz] = payload.position;
-    const [pitch, yaw] = payload.rotation; // スロープでのピッチ角度も取得
+    const [pitch, yaw] = payload.rotation;
 
     // yaw に基づきローカルオフセットを回転
     const ox = FRONT_OFFSET[0] * Math.cos(yaw) - FRONT_OFFSET[2] * Math.sin(yaw);
     const oz = FRONT_OFFSET[0] * Math.sin(yaw) + FRONT_OFFSET[2] * Math.cos(yaw);
     const targetPos: [number, number, number] = [px - ox, py + FRONT_OFFSET[1], pz + oz];
 
-    // 距離ベース先読み方式: lookAheadYaw は先頭の少し前方の接線方向（カメラ空間）
-    const LOOK_AHEAD_BLEND = 0.6; // 先読み方向へのブレンド率 (0=なし, 1=完全)
-    const BLENDED_YAW_SMOOTH = 0.12; // スムージング係数（大きいほど追従が速い）
+    // 距離ベース先読み方式
+    const LOOK_AHEAD_BLEND = 0.6;
+    const BLENDED_YAW_SMOOTH = 0.12;
 
     let blendedYaw = yaw;
     if (payload.lookAheadYaw !== undefined) {
@@ -123,39 +118,30 @@ export function useCameraController() {
     }
     const stabilizedYaw = (handleTrainPose as any)._smoothedYaw as number;
 
-    // 電車の進行方向（スロープでのピッチ） + ユーザー手動調整 + 先読み補間 + スムージング
     const targetYaw = stabilizedYaw + frontLookYaw.value;
-    const targetPitch = -pitch + frontLookPitch.value; // ピッチは元の傾斜を忠実に（/3 を撤回）
+    const targetPitch = -pitch + frontLookPitch.value;
 
     // 現在値から目標へ補間
-    cameraPosition.value = lerp3(cameraPosition.value, targetPos, CAM_POS_LERP);
-    cameraRotation.value = [
-      lerp(cameraRotation.value[0], targetPitch, CAM_ROT_LERP),
-      angleLerp(cameraRotation.value[1], targetYaw, CAM_ROT_LERP),
+    store.cameraPosition = lerp3(store.cameraPosition, targetPos, CAM_POS_LERP);
+    store.cameraRotation = [
+      lerp(store.cameraRotation[0], targetPitch, CAM_ROT_LERP),
+      angleLerp(store.cameraRotation[1], targetYaw, CAM_ROT_LERP),
       0,
     ];
-
-    // ドラッグ終了後の自動リセットは行わない（ユーザー操作のみで維持/変更）
   };
 
   // Watch for camera mode changes to reset to orbit position
-  watch(cameraMode, (mode) => {
-    if (mode === "orbit") {
-      cameraPosition.value = [...ORBIT_INITIAL_POSITION];
-      cameraRotation.value = [...ORBIT_INITIAL_ROTATION];
-    }
-  });
+  watch(
+    () => store.cameraMode,
+    (mode) => {
+      if (mode === "orbit") {
+        store.resetToOrbit();
+      }
+    },
+  );
 
   return {
-    // State
-    cameraMode,
-    cameraPosition,
-    cameraRotation,
-    followTarget,
-
-    // Methods
     toggleCameraMode,
-    resetToOrbit,
     handleTrainPose,
     startFrontLook,
     updateFrontLook,
